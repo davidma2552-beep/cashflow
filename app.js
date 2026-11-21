@@ -37,6 +37,14 @@ async function createFirebaseBackend() {
       await batch.commit();
     },
     removeTransaction: (uid, id) => F.deleteDoc(F.doc(db, "users", uid, "transactions", id)),
+    async renameCategory(uid, from, to) {
+      const snap = await F.getDocs(F.query(txCol(uid), F.where("category", "==", from)));
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const batch = F.writeBatch(db);
+        snap.docs.slice(i, i + 400).forEach((d) => batch.update(d.ref, { category: to }));
+        await batch.commit();
+      }
+    },
     saveSettings: (uid, s) => F.setDoc(userDoc(uid), s, { merge: true }),
   };
 }
@@ -88,6 +96,10 @@ function createDemoBackend() {
     async removeTransaction(uid, id) {
       const u = userData(uid);
       u.tx = u.tx.filter((t) => t.id !== id);
+      write(state); emitData(uid);
+    },
+    async renameCategory(uid, from, to) {
+      userData(uid).tx.forEach((t) => { if (t.category === from) t.category = to; });
       write(state); emitData(uid);
     },
     async saveSettings(uid, s) {
@@ -179,23 +191,109 @@ function render() {
   }).join("");
   $("empty").classList.toggle("hidden", monthTx.length > 0);
 
-  // Categories
-  const byCat = {};
-  monthTx.filter((t) => t.type === "expense").forEach((t) => { byCat[t.category] = (byCat[t.category] || 0) + Number(t.amount); });
-  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
-  const max = cats[0]?.[1] || 1;
-  $("cats").innerHTML = cats.length
-    ? cats.map(([c, v]) => `<div class="cat-row"><div class="cat-top"><span>${esc(c)}</span><span class="num">${fmt(v)}</span></div><div class="cat-bar"><div style="width:${(v / max) * 100}%"></div></div></div>`).join("")
-    : `<p class="muted">אין הוצאות בחודש הזה.</p>`;
-
-  // Category suggestions
-  const allCats = [...new Set(txs.map((t) => t.category).filter(Boolean))];
-  const defaults = ["משכורת", "שכירות", "מזון", "חשבונות", "רכב", "בילויים", "ביטוח", "חיסכון", "אחר"];
-  $("cat-list").innerHTML = [...new Set([...allCats, ...defaults])].map((c) => `<option value="${esc(c)}">`).join("");
+  renderCategories(monthTx);
 
   if (document.activeElement !== $("opening")) $("opening").value = opening || "";
 
   renderChart(sorted, opening);
+}
+
+
+const DEFAULT_CATS = ["מזון", "שכירות", "חשבונות", "רכב", "בילויים", "אחר"];
+const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
+let editingCat = null;
+
+// Categories live in the user's settings doc. Until the user edits them, show defaults (unsaved).
+function getCategories() {
+  if (Array.isArray(settings.categories)) return settings.categories;
+  return DEFAULT_CATS.map((name) => ({ id: "default-" + name, name, budget: 0 }));
+}
+const saveCategories = (cats) =>
+  backend.saveSettings(user.uid, { categories: cats.map(({ id, name, budget }) => ({ id, name, budget: Number(budget) || 0 })) });
+
+function renderCategories(monthTx) {
+  const cats = getCategories();
+  const spentBy = {};
+  monthTx.filter((t) => t.type === "expense").forEach((t) => { spentBy[t.category] = (spentBy[t.category] || 0) + Number(t.amount); });
+
+  let totBudget = 0, totSpent = 0;
+  $("cat-tiles").innerHTML = cats.map((c) => {
+    const spent = spentBy[c.name] || 0;
+    const budget = Number(c.budget) || 0;
+    const id = esc(c.id);
+    if (budget > 0) { totBudget += budget; totSpent += spent; }
+
+    if (editingCat === c.id) {
+      return `<div class="tile editing">
+        <form class="tile-edit" data-editform="${id}">
+          <label>שם<input name="name" maxlength="40" required value="${esc(c.name)}" /></label>
+          <label>תקציב חודשי (₪)<input name="budget" type="number" min="0" step="1" inputmode="decimal" value="${budget || ""}" placeholder="ללא תקציב" /></label>
+          <div class="row gap">
+            <button type="submit" class="btn btn-primary btn-sm grow">שמירה</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-cancel>ביטול</button>
+            <button type="button" class="btn btn-ghost btn-sm danger" data-delcat="${id}">מחיקה</button>
+          </div>
+        </form>
+      </div>`;
+    }
+
+    const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
+    const left = budget - spent;
+    const level = budget > 0 && spent > budget ? "over" : pct >= 85 ? "warn" : "";
+    const status = budget > 0
+      ? (left >= 0 ? `<span>נשאר <b>${fmt(left)}</b></span>` : `<span class="neg">חריגה של <b>${fmt(-left)}</b></span>`)
+      : `<span class="muted">ללא תקציב</span>`;
+    return `<div class="tile ${level}">
+      <div class="tile-head"><strong>${esc(c.name)}</strong><button class="icon-btn" data-edit="${id}" title="עריכה" aria-label="עריכת ${esc(c.name)}">✎</button></div>
+      <div class="tile-nums"><span class="num-big">${fmt(spent)}</span>${budget > 0 ? `<span class="muted">מתוך ${fmt(budget)}</span>` : ""}</div>
+      ${budget > 0 ? `<div class="cat-bar"><div class="${level}" style="width:${pct}%"></div></div>` : ""}
+      <div class="tile-status">${status}</div>
+      <form class="quick" data-quick="${id}">
+        <input name="amount" type="number" step="0.01" min="0.01" required inputmode="decimal" placeholder="סכום" aria-label="סכום הוצאה ב${esc(c.name)}" />
+        <input name="desc" maxlength="100" placeholder="תיאור" aria-label="תיאור (לא חובה)" />
+        <button type="submit" class="btn btn-primary btn-sm" title="הוספת הוצאה">+</button>
+      </form>
+    </div>`;
+  }).join("") || `<p class="muted">אין קטגוריות עדיין. הוסיפו את הראשונה למטה.</p>`;
+
+  $("budget-total").innerHTML = totBudget > 0 ? `הוצאתם ${fmt(totSpent)} מתוך תקציב של ${fmt(totBudget)}` : "";
+
+  // Category dropdown in the main form (keep the current selection)
+  const sel = $("tx-cat-select");
+  const prev = sel.value;
+  sel.innerHTML = cats.length
+    ? cats.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("")
+    : `<option value="" disabled selected>הוסיפו קטגוריה קודם</option>`;
+  if (cats.some((c) => c.name === prev)) sel.value = prev;
+
+  // Income source suggestions
+  const incomeCats = [...new Set(txs.filter((t) => t.type === "income").map((t) => t.category).filter(Boolean))];
+  $("cat-list").innerHTML = [...new Set([...incomeCats, "משכורת", "עבודה נוספת", "החזרים", "מתנות"])].map((c) => `<option value="${esc(c)}">`).join("");
+}
+
+// Date used for expenses entered from a category tile: today, or the 1st of the viewed month.
+function quickDate() {
+  const d = new Date();
+  return d.getFullYear() === viewY && d.getMonth() === viewM ? ymd(d) : `${monthKey(viewY, viewM)}-01`;
+}
+
+let toastTimer;
+function toast(msg, isError) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "toast" + (isError ? " error-toast" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add("hidden"), 2800);
+}
+
+// Two-step confirmation without native dialogs (they can be blocked in embedded pages).
+function confirmClick(btn, label, action) {
+  if (btn.dataset.armed) { action(); return; }
+  btn.dataset.armed = "1";
+  const orig = btn.textContent;
+  btn.textContent = label;
+  btn.classList.add("armed");
+  setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = orig; btn.classList.remove("armed"); } }, 3000);
 }
 
 function renderChart(sorted, opening) {
@@ -298,13 +396,25 @@ function wireEvents() {
   $("today-btn").onclick = () => { const d = new Date(); viewY = d.getFullYear(); viewM = d.getMonth(); render(); };
 
   $("tx-date").value = todayStr();
+
+  // Expense → pick a defined category; income → optional free-text source
+  const syncType = () => {
+    const isIncome = document.querySelector("input[name=type]:checked").value === "income";
+    $("cat-select-wrap").classList.toggle("hidden", isIncome);
+    $("cat-text-wrap").classList.toggle("hidden", !isIncome);
+    $("tx-cat-select").required = !isIncome;
+  };
+  document.querySelectorAll("input[name=type]").forEach((r) => r.addEventListener("change", syncType));
+  syncType();
+
   $("tx-form").onsubmit = async (e) => {
     e.preventDefault();
+    const type = document.querySelector("input[name=type]:checked").value;
     const base = {
-      type: document.querySelector("input[name=type]:checked").value,
+      type,
       amount: Math.round(parseFloat($("tx-amount").value) * 100) / 100,
       description: $("tx-desc").value.trim(),
-      category: $("tx-cat").value.trim(),
+      category: type === "income" ? ($("tx-cat").value.trim() || "הכנסה") : $("tx-cat-select").value,
     };
     const date = $("tx-date").value;
     const n = Number($("tx-repeat").value);
@@ -313,21 +423,91 @@ function wireEvents() {
     const btn = e.submitter; if (btn) btn.disabled = true;
     try {
       await backend.addTransactions(user.uid, list);
-      $("tx-amount").value = ""; $("tx-desc").value = ""; $("tx-repeat").value = "1";
+      $("tx-amount").value = ""; $("tx-desc").value = ""; $("tx-cat").value = ""; $("tx-repeat").value = "1";
       const [y, m] = date.split("-").map(Number); viewY = y; viewM = m - 1; render();
-    } catch (ex) { alert("שמירה נכשלה: " + ex.message); }
+      toast("נשמר");
+    } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); }
     finally { if (btn) btn.disabled = false; }
   };
 
   $("tx-body").onclick = (e) => {
-    const id = e.target.closest("[data-del]")?.dataset.del;
-    if (id && confirm("למחוק את התנועה?")) backend.removeTransaction(user.uid, id).catch((ex) => alert(ex.message));
+    const btn = e.target.closest("[data-del]");
+    if (!btn) return;
+    confirmClick(btn, "למחוק?", () =>
+      backend.removeTransaction(user.uid, btn.dataset.del).catch((ex) => toast(ex.message, true)));
   };
 
   $("opening").onchange = () => {
     const v = parseFloat($("opening").value) || 0;
-    backend.saveSettings(user.uid, { openingBalance: v }).catch((ex) => alert(ex.message));
+    backend.saveSettings(user.uid, { openingBalance: v }).catch((ex) => toast(ex.message, true));
   };
+
+  // ----- Categories -----
+  const nameTaken = (name, exceptId) =>
+    getCategories().some((c) => c.id !== exceptId && c.name.trim().toLowerCase() === name.toLowerCase());
+
+  $("cat-form").onsubmit = async (e) => {
+    e.preventDefault();
+    $("cat-error").textContent = "";
+    const name = $("cat-name").value.trim();
+    const budget = Math.max(0, parseFloat($("cat-budget").value) || 0);
+    if (!name) return;
+    if (nameTaken(name)) { $("cat-error").textContent = "כבר יש קטגוריה בשם הזה"; return; }
+    try {
+      await saveCategories([...getCategories(), { id: newId(), name, budget }]);
+      $("cat-name").value = ""; $("cat-budget").value = "";
+      toast(`הקטגוריה "${name}" נוספה`);
+    } catch (ex) { toast(ex.message, true); }
+  };
+
+  $("cat-tiles").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const cats = getCategories();
+
+    if (f.dataset.quick) {
+      const cat = cats.find((c) => c.id === f.dataset.quick);
+      const amount = Math.round(parseFloat(f.amount.value) * 100) / 100;
+      if (!cat || !(amount > 0)) return;
+      f.querySelector("button").disabled = true;
+      try {
+        await backend.addTransactions(user.uid, [{ type: "expense", amount, description: f.desc.value.trim(), category: cat.name, date: quickDate() }]);
+        toast(`נוספה הוצאה של ${fmt(amount)} ב${cat.name}`);
+      } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); f.querySelector("button").disabled = false; }
+      return;
+    }
+
+    if (f.dataset.editform) {
+      const id = f.dataset.editform;
+      const name = f.name.value.trim();
+      const budget = Math.max(0, parseFloat(f.budget.value) || 0);
+      if (!name) return;
+      if (nameTaken(name, id)) { toast("כבר יש קטגוריה בשם הזה", true); return; }
+      const old = cats.find((c) => c.id === id);
+      try {
+        await saveCategories(cats.map((c) => (c.id === id ? { ...c, name, budget } : c)));
+        // Keep existing expenses attached to a renamed category
+        if (old && old.name !== name && backend.renameCategory) await backend.renameCategory(user.uid, old.name, name);
+        editingCat = null; render();
+      } catch (ex) { toast(ex.message, true); }
+    }
+  });
+
+  $("cat-tiles").addEventListener("click", (e) => {
+    const edit = e.target.closest("[data-edit]");
+    if (edit) { editingCat = edit.dataset.edit; render(); $("cat-tiles").querySelector(".tile-edit input")?.focus(); return; }
+    if (e.target.closest("[data-cancel]")) { editingCat = null; render(); return; }
+    const del = e.target.closest("[data-delcat]");
+    if (del) {
+      confirmClick(del, "בטוח?", async () => {
+        try {
+          await saveCategories(getCategories().filter((c) => c.id !== del.dataset.delcat));
+          editingCat = null; render();
+          toast("הקטגוריה נמחקה. ההוצאות שכבר נרשמו בה נשארות");
+        } catch (ex) { toast(ex.message, true); }
+      });
+    }
+  });
 
   $("export-btn").onclick = () => {
     const rows = [["תאריך", "סוג", "תיאור", "קטגוריה", "סכום"]];

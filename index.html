@@ -74,7 +74,8 @@
             </div>
             <label>סכום (₪)<input type="number" id="tx-amount" step="0.01" min="0.01" required inputmode="decimal" /></label>
             <label>תיאור (לא חובה)<input type="text" id="tx-desc" maxlength="100" /></label>
-            <label>קטגוריה<input type="text" id="tx-cat" list="cat-list" maxlength="40" required /></label>
+            <label id="cat-select-wrap">קטגוריה<select id="tx-cat-select" required></select></label>
+            <label id="cat-text-wrap" class="hidden">מקור ההכנסה (לא חובה)<input type="text" id="tx-cat" list="cat-list" maxlength="40" placeholder="למשל: משכורת" /></label>
             <datalist id="cat-list"></datalist>
             <label>תאריך<input type="date" id="tx-date" required /></label>
             <label>חזרה חודשית
@@ -105,7 +106,22 @@
         </div>
       </div>
 
-      <div class="grid">
+      <div class="card section">
+        <div class="row between">
+          <h3>קטגוריות ותקציב חודשי</h3>
+          <div id="budget-total" class="muted"></div>
+        </div>
+        <p class="muted small">מגדירים לכל קטגוריה תקציב חודשי, ומזינים הוצאות ישר מתוך הכרטיס שלה. הוצאה שמוזנת מכרטיס נרשמת בתאריך של היום, או ב-1 לחודש אם אתם צופים בחודש אחר.</p>
+        <div id="cat-tiles" class="tiles"></div>
+        <form id="cat-form" class="cat-form">
+          <input id="cat-name" maxlength="40" required placeholder="שם קטגוריה חדשה" aria-label="שם קטגוריה" />
+          <input id="cat-budget" type="number" min="0" step="1" inputmode="decimal" placeholder="תקציב חודשי ₪ (לא חובה)" aria-label="תקציב חודשי" />
+          <button type="submit" class="btn btn-primary">+ הוספת קטגוריה</button>
+        </form>
+        <p id="cat-error" class="error"></p>
+      </div>
+
+      <div class="grid single">
         <div class="card span2">
           <h3>תנועות החודש</h3>
           <div class="table-wrap">
@@ -116,14 +132,11 @@
           </div>
           <p id="empty" class="muted center hidden">אין תנועות בחודש הזה עדיין.</p>
         </div>
-        <div class="card">
-          <h3>הוצאות לפי קטגוריה</h3>
-          <div id="cats"></div>
-        </div>
       </div>
     </main>
   </section>
 
+  <div id="toast" class="toast hidden" role="status"></div>
   <div id="loading" class="loading">טוען…</div>
 
   <script type="module" src="app.js"></script>
