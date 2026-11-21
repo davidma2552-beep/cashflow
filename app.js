@@ -239,7 +239,7 @@ function render() {
   const key = viewKey();
   const [start, end] = periodRange(viewY, viewM);
   $("month-label").textContent = `${HE_MONTHS[viewM]} ${viewY}`;
-  $("period-range").textContent = `${dm(start)} – ${dm(end)}`;
+  $("period-range").textContent = `${dm(start)} עד ${dm(end)}`;
   if (document.activeElement !== $("reset-day")) $("reset-day").value = String(resetDay());
 
   const sorted = [...txs].sort(byDateTime);
@@ -496,7 +496,7 @@ function wireEvents() {
   $("next-month").onclick = () => shift(1);
   $("today-btn").onclick = () => { goToCurrentPeriod(); render(); };
 
-  $("reset-day").innerHTML = Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+  $("reset-day").innerHTML = Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}">${i + 1}${i === 30 ? " (או סוף החודש)" : ""}</option>`).join("");
   $("reset-day").onchange = async () => {
     const day = Number($("reset-day").value);
     try {

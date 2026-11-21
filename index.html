@@ -58,9 +58,19 @@
         </div>
         <button id="next-month" class="btn btn-ghost btn-sm" aria-label="חודש הבא">←</button>
         <button id="today-btn" class="btn btn-ghost btn-sm">החודש הנוכחי</button>
-        <label class="reset-day" title="היום בחודש שבו ההכנסות וההוצאות מתחילות מאפס. הקטגוריות, התקציבים וההכנסות הקבועות נשמרים.">
-          הכספים מתאפסים ב-<select id="reset-day" aria-label="יום האיפוס בחודש"></select> בכל חודש
+      </div>
+
+      <div class="reset-box">
+        <span class="reset-icon" aria-hidden="true">🔄</span>
+        <label for="reset-day" class="reset-text">
+          <b>יום האיפוס החודשי</b>
+          <span class="muted">באיזה יום בחודש הסכומים מתחילים מאפס (למשל יום המשכורת). הקטגוריות וההכנסות הקבועות נשמרות.</span>
         </label>
+        <div class="reset-pick">
+          <span>כל</span>
+          <select id="reset-day"></select>
+          <span>לחודש</span>
+        </div>
       </div>
 
       <div class="stats">

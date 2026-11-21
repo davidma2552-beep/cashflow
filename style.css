@@ -101,9 +101,17 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 .month-nav { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .month-nav h2 { margin: 0; font-size: 1.35rem; }
 .period { min-width: 9rem; text-align: center; line-height: 1.2; }
-#period-range { font-size: .82rem; direction: ltr; }
-.reset-day { flex-direction: row; align-items: center; gap: .4rem; margin: 0 auto 0 0; font-size: .88rem; white-space: nowrap; }
-.reset-day select { width: auto; padding: .3rem .5rem; }
+#period-range { font-size: .82rem; }
+.reset-box {
+  display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; margin-bottom: 1rem;
+  background: color-mix(in srgb, var(--primary) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: 14px; padding: .8rem 1rem;
+}
+.reset-icon { font-size: 1.4rem; }
+.reset-text { flex: 1 1 240px; margin: 0; gap: .1rem; color: var(--text); font-size: .9rem; }
+.reset-text b { font-size: 1rem; }
+.reset-pick { display: flex; align-items: center; gap: .5rem; font-weight: 500; }
+.reset-pick select { width: auto; font-size: 1.05rem; font-weight: 700; padding: .45rem .7rem; min-width: 4.5rem; background: var(--card); }
 tr.fixed td { background: color-mix(in srgb, var(--pos) 6%, transparent); }
 .hint { font-size: .8rem; margin: -.3rem 0 .6rem; }
 
