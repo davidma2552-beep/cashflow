@@ -163,24 +163,29 @@ function render() {
   const key = monthKey(viewY, viewM);
   $("month-label").textContent = `${HE_MONTHS[viewM]} ${viewY}`;
 
-  const opening = Number(settings.openingBalance || 0);
+  // Each month stands on its own: what came in that month minus what went out.
   const sorted = [...txs].sort(byDateTime);
-  const before = sorted.filter((t) => t.date.slice(0, 7) < key).reduce((s, t) => s + signed(t), 0);
   const monthTx = sorted.filter((t) => t.date.slice(0, 7) === key);
   const income = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const expense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
-  const open = opening + before;
-  const close = open + income - expense;
+  const close = income - expense;
 
-  $("s-open").textContent = fmt(open);
   $("s-in").textContent = fmt(income);
   $("s-out").textContent = fmt(expense);
   $("s-close").textContent = fmt(close);
   $("s-close").className = "stat-value " + (close < 0 ? "neg" : "");
-  $("s-open").className = "stat-value " + (open < 0 ? "neg" : "");
+
+  // How much of this month's income was spent
+  const pct = income > 0 ? (expense / income) * 100 : expense > 0 ? 100 : 0;
+  $("usage-text").innerHTML = income > 0 || expense > 0
+    ? `הוצאתם <b>${fmt(expense)}</b> מתוך <b>${fmt(income)}</b> שהכנסתם`
+    : `<span class="muted">עוד אין תנועות בחודש הזה. התחילו בהוספת הכנסה בקטגוריית הכנסה.</span>`;
+  $("usage-pct").textContent = income > 0 ? `${Math.round(pct)}%` : "";
+  $("usage-bar").style.width = Math.min(100, pct) + "%";
+  $("usage-bar").className = expense > income ? "over" : pct >= 85 ? "warn" : "";
 
   // Table
-  let bal = open;
+  let bal = 0;
   const today = todayStr();
   $("tx-body").innerHTML = monthTx.map((t) => {
     bal += signed(t);
@@ -199,9 +204,7 @@ function render() {
 
   renderCategories(monthTx);
 
-  if (document.activeElement !== $("opening")) $("opening").value = opening || "";
-
-  renderChart(sorted, opening);
+  renderChart(sorted);
 }
 
 
@@ -303,22 +306,20 @@ function confirmClick(btn, label, action) {
   setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = orig; btn.classList.remove("armed"); } }, 3000);
 }
 
-function renderChart(sorted, opening) {
+function renderChart(sorted) {
   // 12 months: 5 before the viewed month, the viewed month, and 6 after
   const months = [];
   for (let i = -5; i <= 6; i++) {
     const d = new Date(viewY, viewM + i, 1);
     months.push({ key: monthKey(d.getFullYear(), d.getMonth()), label: HE_MONTHS[d.getMonth()].slice(0, 3) + "׳" + String(d.getFullYear()).slice(2), inc: 0, out: 0 });
   }
-  const first = months[0].key;
-  let bal = opening + sorted.filter((t) => t.date.slice(0, 7) < first).reduce((s, t) => s + signed(t), 0);
   const idx = Object.fromEntries(months.map((m, i) => [m.key, i]));
   for (const t of sorted) {
     const i = idx[t.date.slice(0, 7)];
     if (i === undefined) continue;
     if (t.type === "income") months[i].inc += Number(t.amount); else months[i].out += Number(t.amount);
   }
-  for (const m of months) { bal += m.inc - m.out; m.bal = bal; }
+  for (const m of months) m.bal = m.inc - m.out;
 
   const W = Math.max(480, Math.round($("chart").clientWidth) || 640), H = 260, L = 48, R = 8, T = 12, B = 28;
   const vals = months.flatMap((m) => [m.inc, m.out, m.bal]);
@@ -345,7 +346,7 @@ function renderChart(sorted, opening) {
       <text x="${cx(i)}" y="${H - 8}" text-anchor="middle" style="${sel ? "font-weight:700;fill:var(--text)" : ""}">${m.label}</text>`;
   }).join("");
   const line = months.map((m, i) => `${i ? "L" : "M"}${cx(i)},${y(m.bal)}`).join(" ");
-  const dots = months.map((m, i) => `<circle cx="${cx(i)}" cy="${y(m.bal)}" r="3" fill="var(--bal)"><title>${m.label}: יתרה ${fmt(m.bal)}</title></circle>`).join("");
+  const dots = months.map((m, i) => `<circle cx="${cx(i)}" cy="${y(m.bal)}" r="3" fill="var(--bal)"><title>${m.label}: נשאר ${fmt(m.bal)}</title></circle>`).join("");
 
   $("chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" direction="ltr" role="img" aria-label="תרשים תזרים">
     ${grid}
@@ -409,10 +410,6 @@ function wireEvents() {
       backend.removeTransaction(user.uid, btn.dataset.del).catch((ex) => toast(ex.message, true)));
   };
 
-  $("opening").onchange = () => {
-    const v = parseFloat($("opening").value) || 0;
-    backend.saveSettings(user.uid, { openingBalance: v }).catch((ex) => toast(ex.message, true));
-  };
 
   // ----- Categories -----
   const nameTaken = (name, exceptId) =>

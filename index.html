@@ -17,7 +17,7 @@
   <section id="auth-view" class="auth-wrap hidden">
     <div class="card auth-card">
       <h1>💰 תזרים מזומנים</h1>
-      <p class="muted">נהלו הכנסות והוצאות, וראו את היתרה הצפויה שלכם. כל משתמש רואה רק את הנתונים שלו.</p>
+      <p class="muted">רושמים כל חודש את ההכנסות וההוצאות, ורואים כמה הוצאתם לעומת כמה הכנסתם. כל משתמש רואה רק את הנתונים שלו.</p>
 
       <button id="google-btn" class="btn btn-google">
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
@@ -58,10 +58,13 @@
       </div>
 
       <div class="stats">
-        <div class="stat"><div class="stat-label">יתרת פתיחה לחודש</div><div id="s-open" class="stat-value"></div></div>
-        <div class="stat"><div class="stat-label">הכנסות</div><div id="s-in" class="stat-value pos"></div></div>
-        <div class="stat"><div class="stat-label">הוצאות</div><div id="s-out" class="stat-value neg"></div></div>
-        <div class="stat"><div class="stat-label">יתרת סגירה</div><div id="s-close" class="stat-value"></div></div>
+        <div class="stat"><div class="stat-label">הכנסות החודש</div><div id="s-in" class="stat-value pos"></div></div>
+        <div class="stat"><div class="stat-label">הוצאות החודש</div><div id="s-out" class="stat-value neg"></div></div>
+        <div class="stat stat-left"><div class="stat-label">נשאר החודש</div><div id="s-close" class="stat-value"></div></div>
+        <div class="stat usage">
+          <div class="row between"><span id="usage-text"></span><span id="usage-pct" class="muted"></span></div>
+          <div class="cat-bar usage-bar"><div id="usage-bar"></div></div>
+        </div>
       </div>
 
       <div class="card section">
@@ -84,13 +87,10 @@
         <div class="card">
           <div class="row between">
             <h3>תזרים 12 חודשים</h3>
-            <div class="legend"><span class="dot in"></span>הכנסות <span class="dot out"></span>הוצאות <span class="dot bal"></span>יתרה</div>
+            <div class="legend"><span class="dot in"></span>הכנסות <span class="dot out"></span>הוצאות <span class="dot bal"></span>נשאר בכל חודש</div>
           </div>
           <div id="chart" class="chart"></div>
-          <div class="row between settings-row">
-            <label class="inline">יתרת פתיחה כללית (₪)
-              <input type="number" id="opening" step="0.01" />
-            </label>
+          <div class="row settings-row">
             <button id="export-btn" class="btn btn-ghost btn-sm">ייצוא ל-CSV</button>
           </div>
         </div>
@@ -101,7 +101,7 @@
           <h3>תנועות החודש</h3>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>תאריך</th><th>שעה</th><th>תיאור</th><th>קטגוריה</th><th class="num">סכום</th><th class="num">יתרה</th><th></th></tr></thead>
+              <thead><tr><th>תאריך</th><th>שעה</th><th>תיאור</th><th>קטגוריה</th><th class="num">סכום</th><th class="num">נשאר</th><th></th></tr></thead>
               <tbody id="tx-body"></tbody>
             </table>
           </div>
