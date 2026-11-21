@@ -170,7 +170,7 @@ function render() {
     const [y, m, d] = t.date.split("-");
     return `<tr class="${t.date > today ? "future" : ""}">
       <td>${d}/${m}/${y.slice(2)}</td>
-      <td class="desc">${esc(t.description)}</td>
+      <td class="desc">${t.description ? esc(t.description) : `<span class="muted">—</span>`}</td>
       <td><span class="tag">${esc(t.category)}</span></td>
       <td class="num ${t.type === "income" ? "pos" : "neg"}">${t.type === "income" ? "+" : "−"}${fmt(Number(t.amount))}</td>
       <td class="num ${bal < 0 ? "neg" : ""}">${fmt(bal)}</td>
@@ -308,7 +308,7 @@ function wireEvents() {
     };
     const date = $("tx-date").value;
     const n = Number($("tx-repeat").value);
-    if (!(base.amount > 0) || !base.description || !base.category || !date) return;
+    if (!(base.amount > 0) || !base.category || !date) return;
     const list = Array.from({ length: n }, (_, i) => ({ ...base, date: addMonths(date, i) }));
     const btn = e.submitter; if (btn) btn.disabled = true;
     try {
@@ -332,7 +332,7 @@ function wireEvents() {
   $("export-btn").onclick = () => {
     const rows = [["תאריך", "סוג", "תיאור", "קטגוריה", "סכום"]];
     [...txs].sort((a, b) => a.date.localeCompare(b.date)).forEach((t) =>
-      rows.push([t.date, t.type === "income" ? "הכנסה" : "הוצאה", t.description, t.category, signed(t)]));
+      rows.push([t.date, t.type === "income" ? "הכנסה" : "הוצאה", t.description || "", t.category, signed(t)]));
     const csv = "﻿" + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
