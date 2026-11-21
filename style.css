@@ -99,7 +99,13 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 
 .container { max-width: 1150px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
 .month-nav { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; flex-wrap: wrap; }
-.month-nav h2 { margin: 0; min-width: 9rem; text-align: center; font-size: 1.35rem; }
+.month-nav h2 { margin: 0; font-size: 1.35rem; }
+.period { min-width: 9rem; text-align: center; line-height: 1.2; }
+#period-range { font-size: .82rem; direction: ltr; }
+.reset-day { flex-direction: row; align-items: center; gap: .4rem; margin: 0 auto 0 0; font-size: .88rem; white-space: nowrap; }
+.reset-day select { width: auto; padding: .3rem .5rem; }
+tr.fixed td { background: color-mix(in srgb, var(--pos) 6%, transparent); }
+.hint { font-size: .8rem; margin: -.3rem 0 .6rem; }
 
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-bottom: 1rem; }
 .stat { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: .9rem 1rem; box-shadow: var(--shadow); }

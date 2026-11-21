@@ -52,9 +52,15 @@
     <main class="container">
       <div class="month-nav">
         <button id="prev-month" class="btn btn-ghost btn-sm" aria-label="חודש קודם">→</button>
-        <h2 id="month-label"></h2>
+        <div class="period">
+          <h2 id="month-label"></h2>
+          <div id="period-range" class="muted"></div>
+        </div>
         <button id="next-month" class="btn btn-ghost btn-sm" aria-label="חודש הבא">←</button>
-        <button id="today-btn" class="btn btn-ghost btn-sm">היום</button>
+        <button id="today-btn" class="btn btn-ghost btn-sm">החודש הנוכחי</button>
+        <label class="reset-day" title="היום בחודש שבו ההכנסות וההוצאות מתחילות מאפס. הקטגוריות, התקציבים וההכנסות הקבועות נשמרים.">
+          הכספים מתאפסים ב-<select id="reset-day" aria-label="יום האיפוס בחודש"></select> בכל חודש
+        </label>
       </div>
 
       <div class="stats">
@@ -72,7 +78,7 @@
           <h3>קטגוריות ותקציב חודשי</h3>
           <div id="budget-total" class="muted"></div>
         </div>
-        <p class="muted small">כל ההכנסות וההוצאות מוזנות מתוך כרטיס הקטגוריה: כותבים תיאור וסכום ולוחצים הוספה. לקטגוריית הוצאה אפשר להגדיר תקציב חודשי. התנועה נרשמת בתאריך ובשעה של עכשיו, או ב-1 לחודש אם אתם צופים בחודש אחר.</p>
+        <p class="muted small">הקטגוריות, התקציבים וההכנסות הקבועות עוברים אוטומטית לכל חודש. ביום האיפוס רק הסכומים מתחילים מאפס. משהו השתנה? לחצו ✎ ועדכנו, והשינוי יחול מהחודש הזה והלאה. הוצאות והכנסות נוספות מזינים מתוך הכרטיס, עם תיאור וסכום.</p>
         <div id="cat-tiles" class="tiles"></div>
         <form id="cat-form" class="cat-form">
           <input id="cat-name" maxlength="40" required placeholder="שם קטגוריה חדשה" aria-label="שם קטגוריה" />
