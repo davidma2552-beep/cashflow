@@ -119,6 +119,11 @@ const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const monthKey = (y, m) => `${y}-${pad(m + 1)}`; // m is 0-based
 const todayStr = () => ymd(new Date());
+const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const nowTime = () => hm(new Date());
+// Older transactions have no time field: fall back to when they were created
+const txTime = (t) => t.time || (t.createdAt ? hm(new Date(t.createdAt)) : "");
+const byDateTime = (a, b) => a.date.localeCompare(b.date) || txTime(a).localeCompare(txTime(b)) || (a.createdAt || 0) - (b.createdAt || 0);
 const signed = (t) => (t.type === "income" ? 1 : -1) * Number(t.amount || 0);
 const HE_MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
 
@@ -159,7 +164,7 @@ function render() {
   $("month-label").textContent = `${HE_MONTHS[viewM]} ${viewY}`;
 
   const opening = Number(settings.openingBalance || 0);
-  const sorted = [...txs].sort((a, b) => a.date.localeCompare(b.date) || (a.createdAt || 0) - (b.createdAt || 0));
+  const sorted = [...txs].sort(byDateTime);
   const before = sorted.filter((t) => t.date.slice(0, 7) < key).reduce((s, t) => s + signed(t), 0);
   const monthTx = sorted.filter((t) => t.date.slice(0, 7) === key);
   const income = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
@@ -182,6 +187,7 @@ function render() {
     const [y, m, d] = t.date.split("-");
     return `<tr class="${t.date > today ? "future" : ""}">
       <td>${d}/${m}/${y.slice(2)}</td>
+      <td class="time">${txTime(t) || `<span class="muted">—</span>`}</td>
       <td class="desc">${t.description ? esc(t.description) : `<span class="muted">—</span>`}</td>
       <td><span class="tag">${esc(t.category)}</span></td>
       <td class="num ${t.type === "income" ? "pos" : "neg"}">${t.type === "income" ? "+" : "−"}${fmt(Number(t.amount))}</td>
@@ -396,6 +402,11 @@ function wireEvents() {
   $("today-btn").onclick = () => { const d = new Date(); viewY = d.getFullYear(); viewM = d.getMonth(); render(); };
 
   $("tx-date").value = todayStr();
+  $("tx-time").value = nowTime();
+  // Keep the time at "now" until the user picks one themselves
+  let timeTouched = false;
+  $("tx-time").addEventListener("input", () => { timeTouched = true; });
+  $("tx-amount").addEventListener("focus", () => { if (!timeTouched) $("tx-time").value = nowTime(); });
 
   // Expense → pick a defined category; income → optional free-text source
   const syncType = () => {
@@ -417,6 +428,7 @@ function wireEvents() {
       category: type === "income" ? ($("tx-cat").value.trim() || "הכנסה") : $("tx-cat-select").value,
     };
     const date = $("tx-date").value;
+    base.time = $("tx-time").value || nowTime();
     const n = Number($("tx-repeat").value);
     if (!(base.amount > 0) || !base.category || !date) return;
     const list = Array.from({ length: n }, (_, i) => ({ ...base, date: addMonths(date, i) }));
@@ -424,6 +436,7 @@ function wireEvents() {
     try {
       await backend.addTransactions(user.uid, list);
       $("tx-amount").value = ""; $("tx-desc").value = ""; $("tx-cat").value = ""; $("tx-repeat").value = "1";
+      $("tx-time").value = nowTime(); timeTouched = false;
       const [y, m] = date.split("-").map(Number); viewY = y; viewM = m - 1; render();
       toast("נשמר");
     } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); }
@@ -471,7 +484,7 @@ function wireEvents() {
       if (!cat || !(amount > 0)) return;
       f.querySelector("button").disabled = true;
       try {
-        await backend.addTransactions(user.uid, [{ type: "expense", amount, description: f.desc.value.trim(), category: cat.name, date: quickDate() }]);
+        await backend.addTransactions(user.uid, [{ type: "expense", amount, description: f.desc.value.trim(), category: cat.name, date: quickDate(), time: nowTime() }]);
         toast(`נוספה הוצאה של ${fmt(amount)} ב${cat.name}`);
       } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); f.querySelector("button").disabled = false; }
       return;
@@ -510,9 +523,9 @@ function wireEvents() {
   });
 
   $("export-btn").onclick = () => {
-    const rows = [["תאריך", "סוג", "תיאור", "קטגוריה", "סכום"]];
-    [...txs].sort((a, b) => a.date.localeCompare(b.date)).forEach((t) =>
-      rows.push([t.date, t.type === "income" ? "הכנסה" : "הוצאה", t.description || "", t.category, signed(t)]));
+    const rows = [["תאריך", "שעה", "סוג", "תיאור", "קטגוריה", "סכום"]];
+    [...txs].sort(byDateTime).forEach((t) =>
+      rows.push([t.date, txTime(t), t.type === "income" ? "הכנסה" : "הוצאה", t.description || "", t.category, signed(t)]));
     const csv = "﻿" + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));

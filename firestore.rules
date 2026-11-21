@@ -12,7 +12,8 @@ service cloud.firestore {
           && request.resource.data.amount is number && request.resource.data.amount > 0
           && request.resource.data.date is string && request.resource.data.date.size() == 10
           && request.resource.data.description is string && request.resource.data.description.size() <= 100
-          && request.resource.data.category is string && request.resource.data.category.size() <= 40;
+          && request.resource.data.category is string && request.resource.data.category.size() <= 40
+          && (!('time' in request.resource.data) || (request.resource.data.time is string && request.resource.data.time.size() == 5));
       }
     }
   }

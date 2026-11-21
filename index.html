@@ -77,7 +77,10 @@
             <label id="cat-select-wrap">קטגוריה<select id="tx-cat-select" required></select></label>
             <label id="cat-text-wrap" class="hidden">מקור ההכנסה (לא חובה)<input type="text" id="tx-cat" list="cat-list" maxlength="40" placeholder="למשל: משכורת" /></label>
             <datalist id="cat-list"></datalist>
-            <label>תאריך<input type="date" id="tx-date" required /></label>
+            <div class="row gap date-time">
+              <label class="grow">תאריך<input type="date" id="tx-date" required /></label>
+              <label>שעה<input type="time" id="tx-time" required /></label>
+            </div>
             <label>חזרה חודשית
               <select id="tx-repeat">
                 <option value="1">ללא (חד-פעמי)</option>
@@ -126,7 +129,7 @@
           <h3>תנועות החודש</h3>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה</th><th class="num">סכום</th><th class="num">יתרה</th><th></th></tr></thead>
+              <thead><tr><th>תאריך</th><th>שעה</th><th>תיאור</th><th>קטגוריה</th><th class="num">סכום</th><th class="num">יתרה</th><th></th></tr></thead>
               <tbody id="tx-body"></tbody>
             </table>
           </div>
