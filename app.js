@@ -195,6 +195,7 @@ const DEFAULT_CATS = [
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
 let editingCat = null;
 const isIncome = (c) => c.kind === "income";
+const UNPLANNED = "לא צפוי";
 
 // Categories live in the user's settings doc and carry over to every period.
 // Until the user edits them, show defaults (unsaved).
@@ -296,6 +297,9 @@ function render() {
   $("empty").classList.toggle("hidden", fixedRows.length + txRows.length > 0);
 
   renderCategories(periodTx, key);
+
+  const unplanned = periodTx.filter((t) => t.category === UNPLANNED && t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  $("unplanned-sum").textContent = unplanned > 0 ? `החודש: ${fmt(unplanned)}` : "";
   renderChart(sorted);
 }
 
@@ -537,6 +541,20 @@ function wireEvents() {
       $("cat-name").value = ""; $("cat-budget").value = "";
       toast(`הקטגוריה "${name}" נוספה`);
     } catch (ex) { toast(ex.message, true); }
+  };
+
+  $("unplanned-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const amount = Math.round(parseFloat($("un-amount").value) * 100) / 100;
+    if (!(amount > 0)) return;
+    const type = $("un-type").value;
+    const btn = e.submitter; if (btn) btn.disabled = true;
+    try {
+      await backend.addTransactions(user.uid, [{ type, amount, description: $("un-desc").value.trim(), category: UNPLANNED, date: quickDate(), time: nowTime() }]);
+      $("un-amount").value = ""; $("un-desc").value = ""; $("un-type").value = "expense";
+      toast(`נוספה ${type === "income" ? "הכנסה" : "הוצאה"} לא צפויה של ${fmt(amount)}`);
+    } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); }
+    finally { if (btn) btn.disabled = false; }
   };
 
   $("cat-tiles").addEventListener("submit", async (e) => {
