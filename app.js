@@ -195,6 +195,31 @@ const DEFAULT_CATS = [
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
 let editingCat = null;
 const isIncome = (c) => c.kind === "income";
+
+// Month totals the user typed in themselves; they replace the calculated totals for that month only.
+const manualFor = (key) => (settings.manualTotals || {})[key] || {};
+const isNum = (v) => typeof v === "number" && isFinite(v);
+let editingStat = null;
+const STAT_LABELS = { income: "הכנסות החודש", expense: "הוצאות החודש" };
+
+function statHTML(kind, value, auto, manual) {
+  const label = STAT_LABELS[kind];
+  if (editingStat === kind) {
+    return `<div class="stat-label">${label}</div>
+      <form class="stat-edit" data-stat-form="${kind}">
+        <input name="v" type="number" step="0.01" min="0" inputmode="decimal" value="${manual ? value : ""}" placeholder="${auto}" aria-label="${label}" />
+        <div class="row gap">
+          <button type="submit" class="btn btn-primary btn-sm">שמירה</button>
+          ${manual ? `<button type="button" class="btn btn-ghost btn-sm" data-stat-auto="${kind}">חישוב אוטומטי</button>` : ""}
+          <button type="button" class="btn btn-ghost btn-sm" data-stat-cancel>ביטול</button>
+        </div>
+      </form>
+      <div class="stat-note">החישוב מהקטגוריות: ${fmt(auto)}</div>`;
+  }
+  return `<div class="stat-label row between"><span>${label}</span><button class="icon-btn edit-stat" data-stat-edit="${kind}" title="הזנה ידנית" aria-label="הזנה ידנית של ${label}">✎</button></div>
+    <button class="stat-value as-btn ${kind === "income" ? "pos" : "neg"}" data-stat-edit="${kind}" title="לחצו כדי להזין סכום">${fmt(value)}</button>
+    <div class="stat-note">${manual ? `<span class="tag manual">הוזן ידנית</span>` : "מחושב מהקטגוריות · לחצו להזנה ידנית"}</div>`;
+}
 const UNPLANNED = "לא צפוי";
 
 // Categories live in the user's settings doc and carry over to every period.
@@ -247,12 +272,17 @@ function render() {
   const periodTx = sorted.filter((t) => periodOf(t.date) === key);
   const fixed = fixedIncomes(key);
   const fixedTotal = fixed.reduce((s, x) => s + x.amount, 0);
-  const income = fixedTotal + periodTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
-  const expense = periodTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  const autoIncome = fixedTotal + periodTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
+  const autoExpense = periodTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  const man = manualFor(key);
+  const income = isNum(man.income) ? man.income : autoIncome;
+  const expense = isNum(man.expense) ? man.expense : autoExpense;
   const left = income - expense;
 
-  $("s-in").textContent = fmt(income);
-  $("s-out").textContent = fmt(expense);
+  $("stat-income").innerHTML = statHTML("income", income, autoIncome, isNum(man.income));
+  $("stat-expense").innerHTML = statHTML("expense", expense, autoExpense, isNum(man.expense));
+  $("stat-income").classList.toggle("editing", editingStat === "income");
+  $("stat-expense").classList.toggle("editing", editingStat === "expense");
   $("s-close").textContent = fmt(left);
   $("s-close").className = "stat-value " + (left < 0 ? "neg" : "");
 
@@ -411,7 +441,12 @@ function renderChart(sorted) {
     if (i === undefined) continue;
     if (t.type === "income") months[i].inc += Number(t.amount); else months[i].out += Number(t.amount);
   }
-  for (const m of months) m.bal = m.inc - m.out;
+  for (const m of months) {
+    const man = manualFor(m.key);
+    if (isNum(man.income)) m.inc = man.income;
+    if (isNum(man.expense)) m.out = man.expense;
+    m.bal = m.inc - m.out;
+  }
 
   const W = Math.max(480, Math.round($("chart").clientWidth) || 640), H = 260, L = 48, R = 8, T = 12, B = 28;
   const vals = months.flatMap((m) => [m.inc, m.out, m.bal]);
@@ -495,7 +530,7 @@ function wireEvents() {
   };
   $("logout-btn").onclick = () => backend.signOut();
 
-  const shift = (n) => { const d = new Date(viewY, viewM + n, 1); viewY = d.getFullYear(); viewM = d.getMonth(); render(); };
+  const shift = (n) => { editingStat = null; const d = new Date(viewY, viewM + n, 1); viewY = d.getFullYear(); viewM = d.getMonth(); render(); };
   $("prev-month").onclick = () => shift(-1);
   $("next-month").onclick = () => shift(1);
   $("today-btn").onclick = () => { goToCurrentPeriod(); render(); };
@@ -542,6 +577,42 @@ function wireEvents() {
       toast(`הקטגוריה "${name}" נוספה`);
     } catch (ex) { toast(ex.message, true); }
   };
+
+  // ----- Typing the month's totals by hand -----
+  const saveManual = async (kind, value) => {
+    const all = JSON.parse(JSON.stringify(settings.manualTotals || {}));
+    const key = viewKey();
+    all[key] = { ...(all[key] || {}), [kind]: value };
+    await backend.saveSettings(user.uid, { manualTotals: all });
+  };
+  $("stat-income").parentElement.addEventListener("click", async (e) => {
+    const ed = e.target.closest("[data-stat-edit]");
+    if (ed) {
+      editingStat = ed.dataset.statEdit; render();
+      const inp = document.querySelector(`[data-stat-form="${editingStat}"] input`);
+      if (inp) { inp.focus(); inp.select(); }
+      return;
+    }
+    if (e.target.closest("[data-stat-cancel]")) { editingStat = null; render(); return; }
+    const auto = e.target.closest("[data-stat-auto]");
+    if (auto) {
+      try { await saveManual(auto.dataset.statAuto, null); editingStat = null; render(); toast("חזרה לחישוב האוטומטי מהקטגוריות"); }
+      catch (ex) { toast(ex.message, true); }
+    }
+  });
+  $("stat-income").parentElement.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const kind = e.target.dataset.statForm;
+    if (!kind) return;
+    const raw = e.target.v.value.trim();
+    const value = raw === "" ? null : Math.max(0, Math.round(parseFloat(raw) * 100) / 100);
+    try {
+      await saveManual(kind, isNum(value) ? value : null);
+      editingStat = null; render();
+      toast(isNum(value) ? `${STAT_LABELS[kind]}: ${fmt(value)}` : "חזרה לחישוב האוטומטי מהקטגוריות");
+    } catch (ex) { toast(ex.message, true); }
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && editingStat) { editingStat = null; render(); } });
 
   $("unplanned-form").onsubmit = async (e) => {
     e.preventDefault();

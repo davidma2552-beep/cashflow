@@ -119,6 +119,19 @@ tr.fixed td { background: color-mix(in srgb, var(--pos) 6%, transparent); }
 .stat { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: .9rem 1rem; box-shadow: var(--shadow); }
 .stat-label { color: var(--muted); font-size: .85rem; }
 .stat-value { font-size: 1.4rem; font-weight: 700; direction: ltr; text-align: right; font-variant-numeric: tabular-nums; }
+.stat-label.row { align-items: center; }
+.edit-stat { font-size: .9rem; padding: 0 .3rem; }
+.edit-stat:hover { color: var(--primary) !important; }
+.as-btn { background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; width: 100%; color: inherit; }
+.as-btn.pos { color: var(--pos); } .as-btn.neg { color: var(--neg); }
+.as-btn:hover { text-decoration: underline dotted; text-underline-offset: 4px; }
+.stat-note { font-size: .78rem; color: var(--muted); margin-top: .15rem; }
+.tag.manual { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.stat { min-width: 0; }
+.stat.editing { grid-column: 1 / -1; }
+.stat-edit .row { flex-wrap: wrap; }
+.stat-edit { display: flex; flex-direction: column; gap: .4rem; margin-top: .3rem; }
+.stat-edit input { font-size: 1.15rem; font-weight: 700; }
 .stat.usage { grid-column: 1 / -1; display: flex; flex-direction: column; gap: .5rem; }
 .usage-bar { height: 10px; margin: 0; }
 .pos { color: var(--pos); }
