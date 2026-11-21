@@ -205,27 +205,35 @@ function render() {
 }
 
 
-const DEFAULT_CATS = ["מזון", "שכירות", "חשבונות", "רכב", "בילויים", "אחר"];
+const DEFAULT_CATS = [
+  { name: "משכורת", kind: "income" },
+  ...["מזון", "שכירות", "חשבונות", "רכב", "בילויים", "אחר"].map((name) => ({ name, kind: "expense" })),
+];
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
 let editingCat = null;
+const isIncome = (c) => c.kind === "income";
 
 // Categories live in the user's settings doc. Until the user edits them, show defaults (unsaved).
 function getCategories() {
   if (Array.isArray(settings.categories)) return settings.categories;
-  return DEFAULT_CATS.map((name) => ({ id: "default-" + name, name, budget: 0 }));
+  return DEFAULT_CATS.map((c) => ({ id: "default-" + c.name, budget: 0, ...c }));
 }
 const saveCategories = (cats) =>
-  backend.saveSettings(user.uid, { categories: cats.map(({ id, name, budget }) => ({ id, name, budget: Number(budget) || 0 })) });
+  backend.saveSettings(user.uid, {
+    categories: cats.map(({ id, name, budget, kind }) => ({ id, name, kind: kind === "income" ? "income" : "expense", budget: kind === "income" ? 0 : Number(budget) || 0 })),
+  });
 
 function renderCategories(monthTx) {
-  const cats = getCategories();
-  const spentBy = {};
-  monthTx.filter((t) => t.type === "expense").forEach((t) => { spentBy[t.category] = (spentBy[t.category] || 0) + Number(t.amount); });
+  // Income categories first, then expenses
+  const cats = [...getCategories()].sort((a, b) => Number(isIncome(b)) - Number(isIncome(a)));
+  const sumBy = { income: {}, expense: {} };
+  monthTx.forEach((t) => { const m = sumBy[t.type]; if (m) m[t.category] = (m[t.category] || 0) + Number(t.amount); });
 
   let totBudget = 0, totSpent = 0;
   $("cat-tiles").innerHTML = cats.map((c) => {
-    const spent = spentBy[c.name] || 0;
-    const budget = Number(c.budget) || 0;
+    const income = isIncome(c);
+    const spent = sumBy[income ? "income" : "expense"][c.name] || 0;
+    const budget = income ? 0 : Number(c.budget) || 0;
     const id = esc(c.id);
     if (budget > 0) { totBudget += budget; totSpent += spent; }
 
@@ -233,7 +241,7 @@ function renderCategories(monthTx) {
       return `<div class="tile editing">
         <form class="tile-edit" data-editform="${id}">
           <label>שם<input name="name" maxlength="40" required value="${esc(c.name)}" /></label>
-          <label>תקציב חודשי (₪)<input name="budget" type="number" min="0" step="1" inputmode="decimal" value="${budget || ""}" placeholder="ללא תקציב" /></label>
+          ${income ? "" : `<label>תקציב חודשי (₪)<input name="budget" type="number" min="0" step="1" inputmode="decimal" value="${budget || ""}" placeholder="ללא תקציב" /></label>`}
           <div class="row gap">
             <button type="submit" class="btn btn-primary btn-sm grow">שמירה</button>
             <button type="button" class="btn btn-ghost btn-sm" data-cancel>ביטול</button>
@@ -246,35 +254,28 @@ function renderCategories(monthTx) {
     const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
     const left = budget - spent;
     const level = budget > 0 && spent > budget ? "over" : pct >= 85 ? "warn" : "";
-    const status = budget > 0
-      ? (left >= 0 ? `<span>נשאר <b>${fmt(left)}</b></span>` : `<span class="neg">חריגה של <b>${fmt(-left)}</b></span>`)
-      : `<span class="muted">ללא תקציב</span>`;
-    return `<div class="tile ${level}">
-      <div class="tile-head"><strong>${esc(c.name)}</strong><button class="icon-btn" data-edit="${id}" title="עריכה" aria-label="עריכת ${esc(c.name)}">✎</button></div>
-      <div class="tile-nums"><span class="num-big">${fmt(spent)}</span>${budget > 0 ? `<span class="muted">מתוך ${fmt(budget)}</span>` : ""}</div>
+    const status = income
+      ? `<span class="pos">התקבל החודש</span>`
+      : budget > 0
+        ? (left >= 0 ? `<span>נשאר <b>${fmt(left)}</b></span>` : `<span class="neg">חריגה של <b>${fmt(-left)}</b></span>`)
+        : `<span class="muted">ללא תקציב</span>`;
+    const verb = income ? "הכנסה" : "הוצאה";
+    return `<div class="tile ${income ? "income" : level}">
+      <div class="tile-head"><strong>${esc(c.name)}</strong><span class="kind ${income ? "pos" : "neg"}">${income ? "הכנסה" : "הוצאה"}</span><button class="icon-btn" data-edit="${id}" title="עריכה" aria-label="עריכת ${esc(c.name)}">✎</button></div>
+      <div class="tile-nums"><span class="num-big ${income ? "pos" : ""}">${fmt(spent)}</span>${budget > 0 ? `<span class="muted">מתוך ${fmt(budget)}</span>` : ""}</div>
       ${budget > 0 ? `<div class="cat-bar"><div class="${level}" style="width:${pct}%"></div></div>` : ""}
       <div class="tile-status">${status}</div>
       <form class="quick" data-quick="${id}">
-        <input name="amount" type="number" step="0.01" min="0.01" required inputmode="decimal" placeholder="סכום" aria-label="סכום הוצאה ב${esc(c.name)}" />
-        <input name="desc" maxlength="100" placeholder="תיאור" aria-label="תיאור (לא חובה)" />
-        <button type="submit" class="btn btn-primary btn-sm" title="הוספת הוצאה">+</button>
+        <input name="desc" maxlength="100" placeholder="תיאור ה${verb}" aria-label="תיאור ה${verb} (לא חובה)" />
+        <div class="quick-row">
+          <input name="amount" type="number" step="0.01" min="0.01" required inputmode="decimal" placeholder="סכום ₪" aria-label="סכום ה${verb} ב${esc(c.name)}" />
+          <button type="submit" class="btn btn-primary btn-sm">+ ${verb}</button>
+        </div>
       </form>
     </div>`;
   }).join("") || `<p class="muted">אין קטגוריות עדיין. הוסיפו את הראשונה למטה.</p>`;
 
   $("budget-total").innerHTML = totBudget > 0 ? `הוצאתם ${fmt(totSpent)} מתוך תקציב של ${fmt(totBudget)}` : "";
-
-  // Category dropdown in the main form (keep the current selection)
-  const sel = $("tx-cat-select");
-  const prev = sel.value;
-  sel.innerHTML = cats.length
-    ? cats.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("")
-    : `<option value="" disabled selected>הוסיפו קטגוריה קודם</option>`;
-  if (cats.some((c) => c.name === prev)) sel.value = prev;
-
-  // Income source suggestions
-  const incomeCats = [...new Set(txs.filter((t) => t.type === "income").map((t) => t.category).filter(Boolean))];
-  $("cat-list").innerHTML = [...new Set([...incomeCats, "משכורת", "עבודה נוספת", "החזרים", "מתנות"])].map((c) => `<option value="${esc(c)}">`).join("");
 }
 
 // Date used for expenses entered from a category tile: today, or the 1st of the viewed month.
@@ -319,7 +320,7 @@ function renderChart(sorted, opening) {
   }
   for (const m of months) { bal += m.inc - m.out; m.bal = bal; }
 
-  const W = 640, H = 240, L = 48, R = 8, T = 12, B = 28;
+  const W = Math.max(480, Math.round($("chart").clientWidth) || 640), H = 260, L = 48, R = 8, T = 12, B = 28;
   const vals = months.flatMap((m) => [m.inc, m.out, m.bal]);
   let hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
   if (hi === lo) hi = lo + 1;
@@ -401,48 +402,6 @@ function wireEvents() {
   $("next-month").onclick = () => shift(1);
   $("today-btn").onclick = () => { const d = new Date(); viewY = d.getFullYear(); viewM = d.getMonth(); render(); };
 
-  $("tx-date").value = todayStr();
-  $("tx-time").value = nowTime();
-  // Keep the time at "now" until the user picks one themselves
-  let timeTouched = false;
-  $("tx-time").addEventListener("input", () => { timeTouched = true; });
-  $("tx-amount").addEventListener("focus", () => { if (!timeTouched) $("tx-time").value = nowTime(); });
-
-  // Expense → pick a defined category; income → optional free-text source
-  const syncType = () => {
-    const isIncome = document.querySelector("input[name=type]:checked").value === "income";
-    $("cat-select-wrap").classList.toggle("hidden", isIncome);
-    $("cat-text-wrap").classList.toggle("hidden", !isIncome);
-    $("tx-cat-select").required = !isIncome;
-  };
-  document.querySelectorAll("input[name=type]").forEach((r) => r.addEventListener("change", syncType));
-  syncType();
-
-  $("tx-form").onsubmit = async (e) => {
-    e.preventDefault();
-    const type = document.querySelector("input[name=type]:checked").value;
-    const base = {
-      type,
-      amount: Math.round(parseFloat($("tx-amount").value) * 100) / 100,
-      description: $("tx-desc").value.trim(),
-      category: type === "income" ? ($("tx-cat").value.trim() || "הכנסה") : $("tx-cat-select").value,
-    };
-    const date = $("tx-date").value;
-    base.time = $("tx-time").value || nowTime();
-    const n = Number($("tx-repeat").value);
-    if (!(base.amount > 0) || !base.category || !date) return;
-    const list = Array.from({ length: n }, (_, i) => ({ ...base, date: addMonths(date, i) }));
-    const btn = e.submitter; if (btn) btn.disabled = true;
-    try {
-      await backend.addTransactions(user.uid, list);
-      $("tx-amount").value = ""; $("tx-desc").value = ""; $("tx-cat").value = ""; $("tx-repeat").value = "1";
-      $("tx-time").value = nowTime(); timeTouched = false;
-      const [y, m] = date.split("-").map(Number); viewY = y; viewM = m - 1; render();
-      toast("נשמר");
-    } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); }
-    finally { if (btn) btn.disabled = false; }
-  };
-
   $("tx-body").onclick = (e) => {
     const btn = e.target.closest("[data-del]");
     if (!btn) return;
@@ -459,15 +418,17 @@ function wireEvents() {
   const nameTaken = (name, exceptId) =>
     getCategories().some((c) => c.id !== exceptId && c.name.trim().toLowerCase() === name.toLowerCase());
 
+  $("cat-kind").onchange = () => $("cat-budget").classList.toggle("hidden", $("cat-kind").value === "income");
   $("cat-form").onsubmit = async (e) => {
     e.preventDefault();
     $("cat-error").textContent = "";
     const name = $("cat-name").value.trim();
-    const budget = Math.max(0, parseFloat($("cat-budget").value) || 0);
+    const kind = $("cat-kind").value;
+    const budget = kind === "income" ? 0 : Math.max(0, parseFloat($("cat-budget").value) || 0);
     if (!name) return;
     if (nameTaken(name)) { $("cat-error").textContent = "כבר יש קטגוריה בשם הזה"; return; }
     try {
-      await saveCategories([...getCategories(), { id: newId(), name, budget }]);
+      await saveCategories([...getCategories(), { id: newId(), name, kind, budget }]);
       $("cat-name").value = ""; $("cat-budget").value = "";
       toast(`הקטגוריה "${name}" נוספה`);
     } catch (ex) { toast(ex.message, true); }
@@ -484,8 +445,9 @@ function wireEvents() {
       if (!cat || !(amount > 0)) return;
       f.querySelector("button").disabled = true;
       try {
-        await backend.addTransactions(user.uid, [{ type: "expense", amount, description: f.desc.value.trim(), category: cat.name, date: quickDate(), time: nowTime() }]);
-        toast(`נוספה הוצאה של ${fmt(amount)} ב${cat.name}`);
+        const type = isIncome(cat) ? "income" : "expense";
+        await backend.addTransactions(user.uid, [{ type, amount, description: f.desc.value.trim(), category: cat.name, date: quickDate(), time: nowTime() }]);
+        toast(`נוספה ${type === "income" ? "הכנסה" : "הוצאה"} של ${fmt(amount)} ב${cat.name}`);
       } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); f.querySelector("button").disabled = false; }
       return;
     }
@@ -493,7 +455,7 @@ function wireEvents() {
     if (f.dataset.editform) {
       const id = f.dataset.editform;
       const name = f.name.value.trim();
-      const budget = Math.max(0, parseFloat(f.budget.value) || 0);
+      const budget = f.budget ? Math.max(0, parseFloat(f.budget.value) || 0) : 0;
       if (!name) return;
       if (nameTaken(name, id)) { toast("כבר יש קטגוריה בשם הזה", true); return; }
       const old = cats.find((c) => c.id === id);
@@ -545,5 +507,6 @@ function wireEvents() {
   }
   if (DEMO) $("demo-banner").classList.remove("hidden");
   wireEvents();
+  let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => user && render(), 150); });
   backend.onAuth(onUser);
 })();
