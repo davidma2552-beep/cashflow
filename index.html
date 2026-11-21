@@ -64,6 +64,21 @@
         <div class="stat"><div class="stat-label">יתרת סגירה</div><div id="s-close" class="stat-value"></div></div>
       </div>
 
+      <div class="card section">
+        <div class="row between">
+          <h3>קטגוריות ותקציב חודשי</h3>
+          <div id="budget-total" class="muted"></div>
+        </div>
+        <p class="muted small">מגדירים לכל קטגוריה תקציב חודשי, ומזינים הוצאות ישר מתוך הכרטיס שלה. הוצאה שמוזנת מכרטיס נרשמת בתאריך של היום, או ב-1 לחודש אם אתם צופים בחודש אחר.</p>
+        <div id="cat-tiles" class="tiles"></div>
+        <form id="cat-form" class="cat-form">
+          <input id="cat-name" maxlength="40" required placeholder="שם קטגוריה חדשה" aria-label="שם קטגוריה" />
+          <input id="cat-budget" type="number" min="0" step="1" inputmode="decimal" placeholder="תקציב חודשי ₪ (לא חובה)" aria-label="תקציב חודשי" />
+          <button type="submit" class="btn btn-primary">+ הוספת קטגוריה</button>
+        </form>
+        <p id="cat-error" class="error"></p>
+      </div>
+
       <div class="grid">
         <div class="card">
           <h3>הוספת תנועה</h3>
@@ -107,21 +122,6 @@
             <button id="export-btn" class="btn btn-ghost btn-sm">ייצוא ל-CSV</button>
           </div>
         </div>
-      </div>
-
-      <div class="card section">
-        <div class="row between">
-          <h3>קטגוריות ותקציב חודשי</h3>
-          <div id="budget-total" class="muted"></div>
-        </div>
-        <p class="muted small">מגדירים לכל קטגוריה תקציב חודשי, ומזינים הוצאות ישר מתוך הכרטיס שלה. הוצאה שמוזנת מכרטיס נרשמת בתאריך של היום, או ב-1 לחודש אם אתם צופים בחודש אחר.</p>
-        <div id="cat-tiles" class="tiles"></div>
-        <form id="cat-form" class="cat-form">
-          <input id="cat-name" maxlength="40" required placeholder="שם קטגוריה חדשה" aria-label="שם קטגוריה" />
-          <input id="cat-budget" type="number" min="0" step="1" inputmode="decimal" placeholder="תקציב חודשי ₪ (לא חובה)" aria-label="תקציב חודשי" />
-          <button type="submit" class="btn btn-primary">+ הוספת קטגוריה</button>
-        </form>
-        <p id="cat-error" class="error"></p>
       </div>
 
       <div class="grid single">
