@@ -199,6 +199,13 @@ tr.future td { opacity: .6; }
 .quick { display: flex; flex-direction: column; gap: .35rem; margin-top: .2rem; }
 .quick-row { display: flex; gap: .35rem; }
 .quick-row input { flex: 1; }
+.cat-group + .cat-group { margin-top: 1.1rem; }
+.group-head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; margin-bottom: .5rem; padding-bottom: .35rem; border-bottom: 1px solid var(--border); }
+.group-head h4 { margin: 0; font-size: 1rem; }
+.group-head span { font-weight: 700; font-variant-numeric: tabular-nums; }
+.tile.deduct { border-color: color-mix(in srgb, var(--neg) 35%, var(--border)); }
+tr.fixed.out td { background: color-mix(in srgb, var(--neg) 6%, transparent); }
+.after-deduct { font-size: .85rem; margin-top: .35rem; padding-top: .35rem; border-top: 1px dashed var(--border); }
 .tile.income { border-color: color-mix(in srgb, var(--pos) 45%, var(--border)); }
 .kind { font-size: .72rem; border: 1px solid currentColor; border-radius: 999px; padding: 0 .45rem; margin-inline-end: auto; opacity: .85; }
 
