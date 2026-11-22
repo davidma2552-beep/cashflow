@@ -393,6 +393,10 @@ function render() {
   ["income", "expense"].forEach((k) => $("stat-" + k).classList.toggle("editing", editingStat === k));
   $("s-close").textContent = fmt(left);
   $("s-close").className = "stat-value " + (left < 0 ? "neg" : "");
+  // Show the calculation: income minus what has actually gone out (ticked deductions + expenses)
+  const pendingDeduct = Math.max(0, deduct - tot.auto.paidDeduct);
+  $("s-close-note").innerHTML = `${fmt(income)} הכנסות − ${fmt(expense)} שירדו בפועל`
+    + (pendingDeduct > 0 && !isNum(man.expense) ? `<br>אחרי שיירדו עוד ${fmt(pendingDeduct)} בהורדות: <b>${fmt(left - pendingDeduct)}</b>` : "");
 
   // How much of this period's income was spent
   const pct = income > 0 ? (expense / income) * 100 : expense > 0 ? 100 : 0;
