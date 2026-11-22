@@ -370,9 +370,15 @@ function render() {
   const paidCount = fixedCats.filter((c) => paidFor(key)[c.id]).length;
   const drawerBtn = `<button type="button" class="drawer-toggle ${drawerOpen ? "open" : ""}" data-drawer aria-expanded="${drawerOpen}">
       ${fixedCats.length ? `סומנו ${paidCount}/${fixedCats.length} · ` : ""}${drawerOpen ? "סגירת הרשימה ▴" : "פתיחת הרשימה ▾"}</button>`;
+  // How much of the list has come out so far (the ticked items)
+  const paidSum = fixedCats.filter((c) => paidFor(key)[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0);
+  const paidPct = deduct > 0 ? Math.min(100, (paidSum / deduct) * 100) : 0;
   $("stat-deduct").innerHTML = `<div class="stat-label">${STAT_LABELS.deduct}</div>
-    <button class="stat-value as-btn neg" data-drawer title="פתיחת הרשימה">${fmt(deduct)}</button>
-    <div class="stat-note">סך כל ההורדות ברשימה שלכם</div>
+    <button class="stat-value as-btn total" data-drawer title="פתיחת הרשימה">${fmt(deduct)}</button>
+    <div class="paid-meter" role="progressbar" aria-valuemin="0" aria-valuemax="${deduct}" aria-valuenow="${paidSum}" aria-label="ירד ${fmt(paidSum)} מתוך ${fmt(deduct)}">
+      <div class="paid-fill ${paidSum >= deduct && deduct > 0 ? "full" : ""}" style="width:${paidPct}%"></div>
+    </div>
+    <div class="paid-text">ירד <b>${fmt(paidSum)}</b> מתוך <b>${fmt(deduct)}</b></div>
     ${drawerBtn}${drawerOpen ? drawerHTML(key) : ""}`;
   const showDrawer = drawerOpen;
   $("stat-deduct").classList.toggle("with-drawer", showDrawer);

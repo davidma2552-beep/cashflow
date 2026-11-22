@@ -133,6 +133,12 @@ tr.fixed td { background: color-mix(in srgb, var(--pos) 6%, transparent); }
 .stat-edit { display: flex; flex-direction: column; gap: .4rem; margin-top: .3rem; }
 .stat-edit input { font-size: 1.15rem; font-weight: 700; }
 .stats.drawer-open { align-items: start; }
+.as-btn.total { color: var(--text); }
+.paid-meter { height: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 99px; overflow: hidden; margin-top: .4rem; }
+.paid-fill { height: 100%; background: var(--pos); border-radius: 99px; transition: width .35s ease; }
+.paid-fill.full { background: var(--pos); box-shadow: 0 0 0 1px var(--pos) inset; }
+.paid-text { font-size: .8rem; color: var(--muted); margin-top: .25rem; }
+.paid-text b { color: var(--text); font-weight: 600; }
 .stat.with-drawer { border-color: color-mix(in srgb, var(--neg) 40%, var(--border)); }
 .drawer-toggle {
   margin-top: .5rem; width: 100%; font: inherit; font-size: .85rem; cursor: pointer; border-radius: 8px;
