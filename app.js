@@ -466,8 +466,8 @@ function renderCategories(periodTx, key) {
         </div>`;
       const budgetField = (show) => `<label class="edit-budget ${show ? "" : "hidden"}">תקציב חודשי (₪)<input name="budget" type="number" min="0" step="1" inputmode="decimal" value="${Number(c.budget) || ""}" placeholder="ללא תקציב" /></label>`;
       const kindField = income ? "" : `<label>סוג<select name="kind" data-kind-switch>
-          <option value="fixed" ${kind === "fixed" ? "selected" : ""}>הורדה חודשית (קבועה)</option>
-          <option value="expense" ${kind === "expense" ? "selected" : ""}>הוצאה אישית (משתנה)</option>
+          <option value="expense" selected>הוצאה אישית (משתנה)</option>
+          <option value="fixed">העברה להורדות החודשיות הקבועות</option>
         </select></label>`;
       return `<div class="tile editing">
         <form class="tile-edit" data-editform="${id}">
@@ -528,7 +528,8 @@ function renderCategories(periodTx, key) {
     if (kind === "expense") return s + (sumBy.expense[c.name] || 0);
     return s + fixedAmount(c, key) + (kind === "income" ? sumBy.income[c.name] || 0 : 0);
   }, 0);
-  $("cat-tiles").innerHTML = ["income", "fixed", "expense"].map((kind) => {
+  // Fixed deductions live in their own list under "הורדות חודשיות קבועות", not here.
+  $("cat-tiles").innerHTML = ["income", "expense"].map((kind) => {
     const list = cats.filter((c) => kindOf(c) === kind);
     if (!list.length) return "";
     return `<div class="cat-group">
@@ -687,7 +688,7 @@ function wireEvents() {
   const nameTaken = (name, exceptId) =>
     liveCategories().some((c) => c.id !== exceptId && c.name.trim().toLowerCase() === name.toLowerCase());
 
-  const CAT_VALUE_PH = { income: "סכום קבוע כל חודש ₪ (לא חובה)", fixed: "סכום שיורד כל חודש ₪", expense: "תקציב חודשי ₪ (לא חובה)" };
+  const CAT_VALUE_PH = { income: "סכום קבוע כל חודש ₪ (לא חובה)", expense: "תקציב חודשי ₪ (לא חובה)" };
   $("cat-kind").onchange = () => { $("cat-budget").placeholder = CAT_VALUE_PH[$("cat-kind").value]; };
   $("cat-form").onsubmit = async (e) => {
     e.preventDefault();
