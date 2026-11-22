@@ -210,7 +210,23 @@ const isIncome = (c) => c.kind === "income";
 const manualFor = (key) => (settings.manualTotals || {})[key] || {};
 const isNum = (v) => typeof v === "number" && isFinite(v);
 let editingStat = null;
-const STAT_LABELS = { income: "הכנסות החודש", expense: "הוצאות החודש" };
+const STAT_LABELS = { income: "הכנסות החודש", deduct: "הורדות חודשיות קבועות", expense: "הוצאות החודש" };
+const STAT_CLS = { income: "pos", deduct: "neg", expense: "neg" };
+
+// The month's totals. Deductions = fixed monthly amounts plus anything entered in a deduction category;
+// expenses = everything else that went out. A total the user typed in replaces the calculated one.
+function periodTotals(key, periodTx) {
+  const fixedKinds = new Set(getCategories().filter((c) => isFixed(c) && activeIn(c, key)).map((c) => c.name));
+  const sum = (list) => list.reduce((s, t) => s + Number(t.amount), 0);
+  const auto = {
+    income: fixedItems(key, "income").reduce((s, x) => s + x.amount, 0) + sum(periodTx.filter((t) => t.type === "income")),
+    deduct: fixedItems(key, "fixed").reduce((s, x) => s + x.amount, 0) + sum(periodTx.filter((t) => t.type === "expense" && fixedKinds.has(t.category))),
+    expense: sum(periodTx.filter((t) => t.type === "expense" && !fixedKinds.has(t.category))),
+  };
+  const man = manualFor(key);
+  const pick = (k) => (isNum(man[k]) ? man[k] : auto[k]);
+  return { auto, man, income: pick("income"), deduct: pick("deduct"), expense: pick("expense") };
+}
 
 function statHTML(kind, value, auto, manual, note = "") {
   const label = STAT_LABELS[kind];
@@ -227,7 +243,7 @@ function statHTML(kind, value, auto, manual, note = "") {
       <div class="stat-note">החישוב מהקטגוריות: ${fmt(auto)}</div>`;
   }
   return `<div class="stat-label row between"><span>${label}</span><button class="icon-btn edit-stat" data-stat-edit="${kind}" title="הזנה ידנית" aria-label="הזנה ידנית של ${label}">✎</button></div>
-    <button class="stat-value as-btn ${kind === "income" ? "pos" : "neg"}" data-stat-edit="${kind}" title="לחצו כדי להזין סכום">${fmt(value)}</button>
+    <button class="stat-value as-btn ${STAT_CLS[kind]}" data-stat-edit="${kind}" title="לחצו כדי להזין סכום">${fmt(value)}</button>
     <div class="stat-note">${manual ? `<span class="tag manual">הוזן ידנית</span>` : "מחושב מהקטגוריות · לחצו להזנה ידנית"}</div>${note}`;
 }
 const UNPLANNED = "לא צפוי";
@@ -283,22 +299,18 @@ function render() {
   const periodTx = sorted.filter((t) => periodOf(t.date) === key);
   const fixed = fixedItems(key, "income");
   const deductions = fixedItems(key, "fixed");
-  const fixedTotal = fixed.reduce((s, x) => s + x.amount, 0);
-  const deductTotal = deductions.reduce((s, x) => s + x.amount, 0);
-  const autoIncome = fixedTotal + periodTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
-  const autoExpense = deductTotal + periodTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
-  const man = manualFor(key);
-  const income = isNum(man.income) ? man.income : autoIncome;
-  const expense = isNum(man.expense) ? man.expense : autoExpense;
+  const tot = periodTotals(key, periodTx);
+  const { income, deduct, man } = tot;
+  const expense = deduct + tot.expense; // everything that went out
   const left = income - expense;
 
-  const afterDeduct = deductTotal > 0
-    ? `<div class="after-deduct">אחרי הורדות חודשיות (${fmt(deductTotal)}): <b class="${income - deductTotal < 0 ? "neg" : ""}">${fmt(income - deductTotal)}</b></div>`
+  const afterDeduct = deduct > 0
+    ? `<div class="after-deduct">אחרי ההורדות הקבועות: <b class="${income - deduct < 0 ? "neg" : ""}">${fmt(income - deduct)}</b></div>`
     : "";
-  $("stat-income").innerHTML = statHTML("income", income, autoIncome, isNum(man.income), afterDeduct);
-  $("stat-expense").innerHTML = statHTML("expense", expense, autoExpense, isNum(man.expense));
-  $("stat-income").classList.toggle("editing", editingStat === "income");
-  $("stat-expense").classList.toggle("editing", editingStat === "expense");
+  $("stat-income").innerHTML = statHTML("income", income, tot.auto.income, isNum(man.income), afterDeduct);
+  $("stat-deduct").innerHTML = statHTML("deduct", deduct, tot.auto.deduct, isNum(man.deduct));
+  $("stat-expense").innerHTML = statHTML("expense", tot.expense, tot.auto.expense, isNum(man.expense));
+  ["income", "deduct", "expense"].forEach((k) => $("stat-" + k).classList.toggle("editing", editingStat === k));
   $("s-close").textContent = fmt(left);
   $("s-close").className = "stat-value " + (left < 0 ? "neg" : "");
 
@@ -484,20 +496,10 @@ function renderChart(sorted) {
   for (let i = -5; i <= 6; i++) {
     const d = new Date(viewY, viewM + i, 1);
     const key = monthKey(d.getFullYear(), d.getMonth());
-    const inc = fixedItems(key, "income").reduce((s, x) => s + x.amount, 0);
-    const out = fixedItems(key, "fixed").reduce((s, x) => s + x.amount, 0);
-    months.push({ key, label: HE_MONTHS[d.getMonth()].slice(0, 3) + "׳" + String(d.getFullYear()).slice(2), inc, out });
-  }
-  const idx = Object.fromEntries(months.map((m, i) => [m.key, i]));
-  for (const t of sorted) {
-    const i = idx[periodOf(t.date)];
-    if (i === undefined) continue;
-    if (t.type === "income") months[i].inc += Number(t.amount); else months[i].out += Number(t.amount);
+    const t = periodTotals(key, sorted.filter((x) => periodOf(x.date) === key));
+    months.push({ key, label: HE_MONTHS[d.getMonth()].slice(0, 3) + "׳" + String(d.getFullYear()).slice(2), inc: t.income, out: t.deduct + t.expense });
   }
   for (const m of months) {
-    const man = manualFor(m.key);
-    if (isNum(man.income)) m.inc = man.income;
-    if (isNum(man.expense)) m.out = man.expense;
     m.bal = m.inc - m.out;
   }
 
