@@ -279,8 +279,8 @@ function periodTotals(key, periodTx) {
   const man = manualFor(key);
   const pick = (k) => (isNum(man[k]) ? man[k] : auto[k]);
   // Planned outflow for the chart: every deduction (paid or not) plus expenses entered
-  const planned = isNum(man.expense) ? man.expense : auto.deduct + auto.personal;
-  return { auto, man, income: pick("income"), deduct: auto.deduct, expense: pick("expense"), planned };
+  const planned = auto.deduct + auto.personal;
+  return { auto, man, income: pick("income"), deduct: auto.deduct, expense: auto.expense, planned };
 }
 
 function statHTML(kind, value, auto, manual, note = "") {
@@ -388,15 +388,13 @@ function render() {
   const showDrawer = drawerOpen;
   $("stat-deduct").classList.toggle("with-drawer", showDrawer);
   $("stat-deduct").parentElement.classList.toggle("drawer-open", showDrawer);
-  const outNote = isNum(man.expense) ? "" : `<div class="stat-note">הורדות שירדו ${fmt(tot.auto.paidDeduct)} · הוצאות ${fmt(tot.auto.personal)}</div>`;
-  $("stat-expense").innerHTML = statHTML("expense", tot.expense, tot.auto.expense, isNum(man.expense), outNote);
-  ["income", "expense"].forEach((k) => $("stat-" + k).classList.toggle("editing", editingStat === k));
+  $("stat-income").classList.toggle("editing", editingStat === "income");
   $("s-close").textContent = fmt(left);
   $("s-close").className = "stat-value " + (left < 0 ? "neg" : "");
   // Show the calculation: income minus what has actually gone out (ticked deductions + expenses)
   const pendingDeduct = Math.max(0, deduct - tot.auto.paidDeduct);
   $("s-close-note").innerHTML = `${fmt(income)} הכנסות − ${fmt(expense)} שירדו בפועל`
-    + (pendingDeduct > 0 && !isNum(man.expense) ? `<br>אחרי שיירדו עוד ${fmt(pendingDeduct)} בהורדות: <b>${fmt(left - pendingDeduct)}</b>` : "");
+    + (pendingDeduct > 0 ? `<br>אחרי שיירדו עוד ${fmt(pendingDeduct)} בהורדות: <b>${fmt(left - pendingDeduct)}</b>` : "");
 
   // How much of this period's income was spent
   const pct = income > 0 ? (expense / income) * 100 : expense > 0 ? 100 : 0;

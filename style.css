@@ -115,7 +115,7 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 tr.fixed td { background: color-mix(in srgb, var(--pos) 6%, transparent); }
 .hint { font-size: .8rem; margin: -.3rem 0 .6rem; }
 
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-bottom: 1rem; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-bottom: 1rem; }
 .stat { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: .9rem 1rem; box-shadow: var(--shadow); }
 .stat-label { color: var(--muted); font-size: .85rem; }
 .stat-value { font-size: 1.4rem; font-weight: 700; direction: ltr; text-align: right; font-variant-numeric: tabular-nums; }
@@ -279,6 +279,7 @@ tr.fixed.out td { background: color-mix(in srgb, var(--neg) 6%, transparent); }
   .stats { grid-template-columns: repeat(2, 1fr); }
   .grid, .grid:last-child, .adders { grid-template-columns: 1fr; }
   .stat.with-drawer { grid-column: 1 / -1; }
+  .stat-left { grid-column: 1 / -1; }
   .stat-value { font-size: 1.2rem; }
   #user-email { display: none; }
 }
