@@ -278,7 +278,8 @@ function drawerHTML(key) {
 function periodTotals(key, periodTx) {
   const sum = (list) => list.reduce((s, t) => s + Number(t.amount), 0);
   const auto = {
-    income: fixedItems(key, "income").reduce((s, x) => s + x.amount, 0) + sum(periodTx.filter((t) => t.type === "income")),
+    baseIncome: fixedItems(key, "income").reduce((s, x) => s + x.amount, 0),
+    incomeTx: sum(periodTx.filter((t) => t.type === "income")),
     deduct: fixedItems(key, "fixed").reduce((s, x) => s + x.amount, 0),
     // What actually went out: deductions ticked as paid plus every expense entered
     paidDeduct: getCategories().filter((c) => isFixed(c) && activeIn(c, key) && paidFor(key)[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0),
@@ -289,15 +290,18 @@ function periodTotals(key, periodTx) {
   const pick = (k) => (isNum(man[k]) ? man[k] : auto[k]);
   // Planned outflow for the chart: every deduction (paid or not) plus expenses entered
   const planned = auto.deduct + auto.personal;
-  return { auto, man, income: pick("income"), deduct: auto.deduct, expense: auto.expense, planned };
+  // The typed-in monthly income is the base; income entered as transactions this month is always added on top.
+  auto.income = auto.baseIncome + auto.incomeTx;
+  const baseIncome = isNum(man.income) ? man.income : auto.baseIncome;
+  return { auto, man, baseIncome, income: baseIncome + auto.incomeTx, deduct: auto.deduct, expense: auto.expense, planned };
 }
 
-function statHTML(kind, value, auto, manual, note = "") {
+function statHTML(kind, value, auto, manual, note = "", editValue = value) {
   const label = STAT_LABELS[kind];
   if (editingStat === kind) {
     return `<div class="stat-label">${label}</div>
       <form class="stat-edit" data-stat-form="${kind}">
-        <input name="v" type="number" step="0.01" min="0" inputmode="decimal" value="${manual ? value : ""}" placeholder="${auto}" aria-label="${label}" />
+        <input name="v" type="number" step="0.01" min="0" inputmode="decimal" value="${manual ? editValue : ""}" placeholder="${auto}" aria-label="${label}" />
         <div class="row gap">
           <button type="submit" class="btn btn-primary btn-sm">שמירה</button>
           ${manual ? `<button type="button" class="btn btn-ghost btn-sm" data-stat-auto="${kind}">חישוב אוטומטי</button>` : ""}
@@ -379,7 +383,10 @@ function render() {
   const afterDeduct = deduct > 0
     ? `<div class="after-deduct">אחרי ההורדות הקבועות: <b class="${income - deduct < 0 ? "neg" : ""}">${fmt(income - deduct)}</b></div>`
     : "";
-  $("stat-income").innerHTML = statHTML("income", income, tot.auto.income, isNum(man.income), afterDeduct);
+  const incomeBreakdown = tot.auto.incomeTx > 0
+    ? `<div class="stat-note">${fmt(tot.baseIncome)} חודשית + <b class="pos">${fmt(tot.auto.incomeTx)}</b> הכנסות נוספות</div>`
+    : "";
+  $("stat-income").innerHTML = statHTML("income", income, tot.auto.baseIncome, isNum(man.income), incomeBreakdown + afterDeduct, tot.baseIncome);
   const fixedCats = getCategories().filter((c) => isFixed(c) && activeIn(c, key));
   const paidCount = fixedCats.filter((c) => paidFor(key)[c.id]).length;
   const drawerBtn = `<button type="button" class="drawer-toggle ${drawerOpen ? "open" : ""}" data-drawer aria-expanded="${drawerOpen}">
@@ -418,12 +425,14 @@ function render() {
   let bal = 0;
   const today = todayStr();
   const dateCell = (ds) => { const [y, m, d] = ds.split("-"); return `${d}/${m}/${y.slice(2)}`; };
-  const fixedRows = fixed.map(({ c, amount }) => {
+  // The monthly income opens the table: the typed-in amount if there is one, otherwise fixed income categories
+  const incomeRows = isNum(man.income) ? (man.income > 0 ? [{ c: { name: "הכנסה חודשית" }, amount: man.income }] : []) : fixed;
+  const fixedRows = incomeRows.map(({ c, amount }) => {
     bal += amount;
     return `<tr class="fixed">
       <td>${dateCell(ymd(start))}</td>
       <td class="time"><span class="muted">—</span></td>
-      <td class="desc"><span class="muted">הכנסה קבועה</span></td>
+      <td class="desc"><span class="muted">הכנסה חודשית</span></td>
       <td><span class="tag">${esc(c.name)}</span></td>
       <td class="num pos">+${fmt(amount)}</td>
       <td class="num">${fmt(bal)}</td>
@@ -833,6 +842,21 @@ function wireEvents() {
       document.querySelector("#drawer-add input[name=name]")?.focus();
     } catch (ex) { toast(ex.message, true); }
   });
+
+  // Income entered from the month's transactions card is added to the month's income
+  $("tx-income-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const amount = Math.round(parseFloat(f.amount.value) * 100) / 100;
+    if (!(amount > 0)) return;
+    const btn = e.submitter; if (btn) btn.disabled = true;
+    try {
+      await backend.addTransactions(user.uid, [{ type: "income", amount, description: f.desc.value.trim(), category: "הכנסה", date: quickDate(), time: nowTime() }]);
+      f.reset();
+      toast(`נוספה הכנסה של ${fmt(amount)} להכנסות החודש`);
+    } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); }
+    finally { if (btn) btn.disabled = false; }
+  };
 
   $("unplanned-form").onsubmit = async (e) => {
     e.preventDefault();

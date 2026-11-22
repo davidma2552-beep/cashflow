@@ -308,3 +308,11 @@ tr.fixed.out td { background: color-mix(in srgb, var(--neg) 6%, transparent); }
   .stat { padding: .75rem .8rem; }
   .stat-value { font-size: 1.15rem; }
 }
+
+.tx-head { align-items: center; margin-bottom: .5rem; }
+.tx-head h3 { margin: 0; }
+.tx-income { display: flex; gap: .4rem; flex-wrap: wrap; }
+.tx-income input { width: auto; padding: .4rem .55rem; font-size: .9rem; }
+.tx-income input[name=desc] { flex: 1 1 140px; }
+.tx-income input[name=amount] { flex: 0 1 110px; }
+@media (max-width: 520px) { .tx-income { width: 100%; } .tx-income input[name=desc] { flex-basis: 100%; } .tx-income input[name=amount] { flex: 1; } }
