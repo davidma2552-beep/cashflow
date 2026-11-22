@@ -207,7 +207,16 @@ let editingCat = null;
 const isIncome = (c) => c.kind === "income";
 
 // Month totals the user typed in themselves; they replace the calculated totals for that month only.
-const manualFor = (key) => (settings.manualTotals || {})[key] || {};
+// Income typed into the top box carries over to later months until the user changes it (or returns to automatic).
+function manualFor(key) {
+  const all = settings.manualTotals || {};
+  const own = { ...(all[key] || {}) };
+  if (own.income === undefined) {
+    const earlier = Object.keys(all).filter((k) => k < key && all[k] && all[k].income !== undefined).sort().pop();
+    if (earlier) own.income = all[earlier].income;
+  }
+  return own;
+}
 const isNum = (v) => typeof v === "number" && isFinite(v);
 let editingStat = null;
 const STAT_LABELS = { income: "הכנסות החודש", deduct: "הורדות חודשיות קבועות", expense: "הוצאות החודש" };
@@ -299,7 +308,7 @@ function statHTML(kind, value, auto, manual, note = "") {
   }
   return `<div class="stat-label row between"><span>${label}</span><button class="icon-btn edit-stat" data-stat-edit="${kind}" title="הזנה ידנית" aria-label="הזנה ידנית של ${label}">✎</button></div>
     <button class="stat-value as-btn ${STAT_CLS[kind]}" data-stat-edit="${kind}" title="לחצו כדי להזין סכום">${fmt(value)}</button>
-    <div class="stat-note">${manual ? `<span class="tag manual">הוזן ידנית</span>` : (kind === "expense" ? "מה שירד בפועל · לחצו להזנה ידנית" : "מחושב מהקטגוריות · לחצו להזנה ידנית")}</div>${note}`;
+    <div class="stat-note">${manual ? `<span class="tag manual">הוזן ידנית</span>` : (kind === "income" ? "לחצו כדי להזין את ההכנסה החודשית" : "לחצו להזנה ידנית")}</div>${note}`;
 }
 const UNPLANNED = "לא צפוי";
 
@@ -537,7 +546,8 @@ function renderCategories(periodTx, key) {
     return s + fixedAmount(c, key) + (kind === "income" ? sumBy.income[c.name] || 0 : 0);
   }, 0);
   // Fixed deductions live in their own list under "הורדות חודשיות קבועות", not here.
-  $("cat-tiles").innerHTML = ["income", "expense"].map((kind) => {
+  // Income is entered in the top box; this section holds personal expenses only.
+  $("cat-tiles").innerHTML = ["expense"].map((kind) => {
     const list = cats.filter((c) => kindOf(c) === kind);
     if (!list.length) return "";
     return `<div class="cat-group">
@@ -747,7 +757,7 @@ function wireEvents() {
     try {
       await saveManual(kind, isNum(value) ? value : null);
       editingStat = null; render();
-      toast(isNum(value) ? `${STAT_LABELS[kind]}: ${fmt(value)}` : "חזרה לחישוב האוטומטי מהקטגוריות");
+      toast(isNum(value) ? `${STAT_LABELS[kind]}: ${fmt(value)}${kind === "income" ? " (גם בחודשים הבאים)" : ""}` : "חזרה לחישוב האוטומטי");
     } catch (ex) { toast(ex.message, true); }
   });
   document.addEventListener("keydown", (e) => {

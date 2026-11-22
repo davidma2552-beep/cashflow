@@ -75,14 +75,14 @@
           <h3>קטגוריות ותקציב חודשי</h3>
           <div id="budget-total" class="muted"></div>
         </div>
-        <p class="muted small">כאן מנהלים את <b>ההכנסות</b> ואת <b>ההוצאות האישיות</b> (מזון, בילויים וכו׳): מזינים הוצאה מתוך הכרטיס, עם תיאור וסכום, ואפשר לקבוע תקציב חודשי. ההורדות הקבועות (שכירות, סלולר, ביטוח) נמצאות ברשימה שבתיבה "הורדות חודשיות קבועות" למעלה. כל הקטגוריות עוברות לחודש הבא, ורק מה שהוזן מתאפס.</p>
+        <p class="muted small">כאן מנהלים את <b>ההוצאות האישיות</b> (מזון, בילויים וכו׳): מזינים הוצאה מתוך הכרטיס, עם תיאור וסכום, ואפשר לקבוע תקציב חודשי. את ההכנסה מזינים בתיבה "הכנסות החודש" למעלה, וההורדות הקבועות (שכירות, סלולר, ביטוח) נמצאות ברשימה שבתיבה "הורדות חודשיות קבועות". כל הקטגוריות עוברות לחודש הבא, ורק מה שהוזן מתאפס.</p>
         <div id="cat-tiles"></div>
         <div class="adders">
           <form id="cat-form" class="adder">
             <h4>➕ קטגוריה חדשה</h4>
             <input id="cat-name" maxlength="40" required placeholder="שם הקטגוריה" aria-label="שם קטגוריה" />
+            <input type="hidden" id="cat-kind" value="expense" />
             <div class="adder-row">
-              <select id="cat-kind" aria-label="סוג הקטגוריה"><option value="expense">הוצאה אישית</option><option value="income">הכנסה</option></select>
               <input id="cat-budget" type="number" min="0" step="1" inputmode="decimal" placeholder="תקציב חודשי ₪ (לא חובה)" aria-label="תקציב חודשי" />
             </div>
             <button type="submit" class="btn btn-primary">הוספת קטגוריה</button>
