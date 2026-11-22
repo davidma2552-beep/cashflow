@@ -145,15 +145,23 @@ tr.fixed td { background: color-mix(in srgb, var(--pos) 6%, transparent); }
 .drawer-sum { font-size: .8rem; margin-bottom: .3rem; }
 .d-list { display: flex; flex-direction: column; }
 .d-row {
-  display: grid; grid-template-columns: auto 1fr 5.5rem; align-items: center; gap: .5rem;
-  padding: .45rem 0; border-bottom: 1px solid var(--border); margin: 0; color: var(--text); font-size: .92rem; cursor: pointer;
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: .4rem;
+  padding: .4rem 0; border-bottom: 1px solid var(--border); font-size: .92rem;
 }
-.d-row input[type=checkbox] { width: 1.15rem; height: 1.15rem; accent-color: var(--pos); cursor: pointer; padding: 0; }
+.d-check { display: flex; flex-direction: row; align-items: center; gap: .5rem; margin: 0; color: var(--text); font-size: inherit; cursor: pointer; min-width: 0; }
+.d-check input { width: 1.15rem; height: 1.15rem; accent-color: var(--pos); cursor: pointer; padding: 0; flex: none; }
 .d-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.d-ok { color: var(--pos); font-size: .75rem; font-weight: 700; text-decoration: none; display: inline-block; }
-.d-amt { padding: .25rem .4rem; font-size: .88rem; font-variant-numeric: tabular-nums; background: var(--card); }
+.d-ok { color: var(--pos); font-size: .75rem; font-weight: 700; }
+.d-amt { font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
+.d-edit-btn { font-size: .9rem; }
+.d-edit-btn:hover { color: var(--primary) !important; }
 .d-row.done .d-name { color: var(--muted); }
 .d-row.done .d-amt { color: var(--muted); text-decoration: line-through; }
+.d-edit { display: flex; flex-direction: column; gap: .35rem; padding: .5rem; margin: .3rem 0; border: 1px solid var(--primary); border-radius: 10px; }
+.d-edit input { padding: .35rem .5rem; font-size: .9rem; background: var(--card); }
+.d-edit-actions { display: flex; gap: .35rem; flex-wrap: wrap; }
+.d-total { display: flex; justify-content: space-between; padding: .45rem 0 .1rem; font-size: .92rem; }
+.d-total b { color: var(--neg); font-variant-numeric: tabular-nums; }
 .drawer-add { display: flex; flex-direction: column; gap: .4rem; margin-top: .6rem; }
 .drawer-add input { padding: .4rem .55rem; font-size: .9rem; }
 .drawer-add-row { display: flex; gap: .4rem; }

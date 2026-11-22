@@ -218,23 +218,41 @@ let drawerOpen = false;
 try { drawerOpen = localStorage.getItem("cashflow-drawer") === "1"; } catch {}
 const paidFor = (key) => (settings.paid || {})[key] || {};
 
+let editingDeduct = null;
 function drawerHTML(key) {
   const items = getCategories().filter((c) => isFixed(c) && activeIn(c, key));
   const paid = paidFor(key);
   const done = items.filter((c) => paid[c.id]);
+  const total = items.reduce((s, c) => s + fixedAmount(c, key), 0);
   const pending = items.filter((c) => !paid[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0);
   const rows = items.map((c) => {
+    const id = esc(c.id);
     const amt = fixedAmount(c, key);
+    if (editingDeduct === c.id) {
+      return `<form class="d-edit" data-dform="${id}">
+        <input name="name" maxlength="40" required value="${esc(c.name)}" aria-label="שם ההורדה" />
+        <input name="amount" type="number" min="0" step="0.01" inputmode="decimal" value="${amt || ""}" placeholder="סכום ₪" aria-label="סכום חודשי" />
+        <div class="d-edit-actions">
+          <button type="submit" class="btn btn-primary btn-sm">שמירה</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-dcancel>ביטול</button>
+          <button type="button" class="btn btn-ghost btn-sm danger" data-ddel="${id}">מחיקה</button>
+        </div>
+      </form>`;
+    }
     const ok = !!paid[c.id];
-    return `<label class="d-row ${ok ? "done" : ""}" title="${ok ? "ירד" : "ממתין"}">
-      <input type="checkbox" data-paid="${esc(c.id)}" ${ok ? "checked" : ""} aria-label="${esc(c.name)} ירד" />
-      <span class="d-name">${esc(c.name)}${ok ? ` <span class="d-ok">✓ ירד</span>` : ""}</span>
-      <input class="d-amt" type="number" min="0" step="0.01" inputmode="decimal" data-amt="${esc(c.id)}" value="${amt || ""}" placeholder="סכום ₪" aria-label="סכום חודשי של ${esc(c.name)}" />
-    </label>`;
+    return `<div class="d-row ${ok ? "done" : ""}">
+      <label class="d-check">
+        <input type="checkbox" data-paid="${id}" ${ok ? "checked" : ""} aria-label="${esc(c.name)} ירד" />
+        <span class="d-name">${esc(c.name)}${ok ? ` <span class="d-ok">✓ ירד</span>` : ""}</span>
+      </label>
+      <span class="d-amt">${amt > 0 ? fmt(amt) : `<span class="muted">ללא סכום</span>`}</span>
+      <button type="button" class="icon-btn d-edit-btn" data-dedit="${id}" title="עריכה או מחיקה" aria-label="עריכת ${esc(c.name)}">✎</button>
+    </div>`;
   }).join("");
   return `<div class="drawer">
     <div class="drawer-sum muted">${items.length ? `ירדו ${done.length} מתוך ${items.length}${pending > 0 ? ` · עוד צפוי לרדת ${fmt(pending)}` : ""}` : "אין עדיין הורדות קבועות"}</div>
     <div class="d-list">${rows}</div>
+    ${items.length ? `<div class="d-total"><span>סה״כ</span><b>${fmt(total)}</b></div>` : ""}
     <form id="drawer-add" class="drawer-add">
       <input name="name" maxlength="40" required placeholder="הורדה חדשה, למשל סלולר" aria-label="שם ההורדה" />
       <div class="drawer-add-row">
@@ -242,23 +260,22 @@ function drawerHTML(key) {
         <button type="submit" class="btn btn-primary btn-sm">+ הוספה</button>
       </div>
     </form>
-    <p class="muted hint">הסימון מתאפס ביום האיפוס. שינוי סכום חל מהחודש הזה והלאה.</p>
+    <p class="muted hint">הסכומים קבועים לכל החודשים עד שתשנו אותם (✎). הסימון "ירד" מתאפס ביום האיפוס.</p>
   </div>`;
 }
 
-// The month's totals. Deductions = fixed monthly amounts plus anything entered in a deduction category;
-// expenses = everything else that went out. A total the user typed in replaces the calculated one.
+// The deductions total is exactly the sum of the user's list; everything else that went out is an expense.
+// A total the user typed in replaces the calculated income or expenses.
 function periodTotals(key, periodTx) {
-  const fixedKinds = new Set(getCategories().filter((c) => isFixed(c) && activeIn(c, key)).map((c) => c.name));
   const sum = (list) => list.reduce((s, t) => s + Number(t.amount), 0);
   const auto = {
     income: fixedItems(key, "income").reduce((s, x) => s + x.amount, 0) + sum(periodTx.filter((t) => t.type === "income")),
-    deduct: fixedItems(key, "fixed").reduce((s, x) => s + x.amount, 0) + sum(periodTx.filter((t) => t.type === "expense" && fixedKinds.has(t.category))),
-    expense: sum(periodTx.filter((t) => t.type === "expense" && !fixedKinds.has(t.category))),
+    deduct: fixedItems(key, "fixed").reduce((s, x) => s + x.amount, 0),
+    expense: sum(periodTx.filter((t) => t.type === "expense")),
   };
   const man = manualFor(key);
   const pick = (k) => (isNum(man[k]) ? man[k] : auto[k]);
-  return { auto, man, income: pick("income"), deduct: pick("deduct"), expense: pick("expense") };
+  return { auto, man, income: pick("income"), deduct: auto.deduct, expense: pick("expense") };
 }
 
 function statHTML(kind, value, auto, manual, note = "") {
@@ -293,6 +310,8 @@ const liveCategories = () => getCategories().filter((c) => !c.deletedFrom);
 
 // Fixed monthly income: a history of {from: date, amount}. Each period uses the latest change made on or before its last day.
 function fixedAmount(c, key) {
+  // Fixed deductions: one amount for every month, exactly as the user set it.
+  if (c.kind === "fixed") { const h = (c.amounts || [])[c.amounts.length - 1]; return h ? Number(h.amount) || 0 : 0; }
   const last = ymd(rangeOfKey(key)[1]);
   let amount = 0;
   [...(c.amounts || [])].map((h) => ({ ...h, from: asDate(h.from) })).sort((x, y) => x.from.localeCompare(y.from))
@@ -304,6 +323,12 @@ const fixedItems = (key, kind) => getCategories()
   .filter((c) => c.kind === kind && activeIn(c, key))
   .map((c) => ({ c, amount: fixedAmount(c, key) }))
   .filter((x) => x.amount > 0);
+// A fixed deduction has a single amount that applies to every month, until the user changes it.
+function setFixedAmount(c, amount) {
+  if (!(amount > 0)) return [];
+  const first = (c.amounts || []).map((h) => asDate(h.from)).sort()[0];
+  return [{ from: first || effectiveDate(viewKey()), amount }];
+}
 function withAmountFrom(c, key, amount) {
   if (fixedAmount(c, key) === amount) return c.amounts || [];
   const from = effectiveDate(key);
@@ -345,12 +370,15 @@ function render() {
   const paidCount = fixedCats.filter((c) => paidFor(key)[c.id]).length;
   const drawerBtn = `<button type="button" class="drawer-toggle ${drawerOpen ? "open" : ""}" data-drawer aria-expanded="${drawerOpen}">
       ${fixedCats.length ? `סומנו ${paidCount}/${fixedCats.length} · ` : ""}${drawerOpen ? "סגירת הרשימה ▴" : "פתיחת הרשימה ▾"}</button>`;
-  $("stat-deduct").innerHTML = statHTML("deduct", deduct, tot.auto.deduct, isNum(man.deduct), drawerBtn + (drawerOpen ? drawerHTML(key) : ""));
-  const showDrawer = drawerOpen && editingStat !== "deduct";
+  $("stat-deduct").innerHTML = `<div class="stat-label">${STAT_LABELS.deduct}</div>
+    <button class="stat-value as-btn neg" data-drawer title="פתיחת הרשימה">${fmt(deduct)}</button>
+    <div class="stat-note">סך כל ההורדות ברשימה שלכם</div>
+    ${drawerBtn}${drawerOpen ? drawerHTML(key) : ""}`;
+  const showDrawer = drawerOpen;
   $("stat-deduct").classList.toggle("with-drawer", showDrawer);
   $("stat-deduct").parentElement.classList.toggle("drawer-open", showDrawer);
   $("stat-expense").innerHTML = statHTML("expense", tot.expense, tot.auto.expense, isNum(man.expense));
-  ["income", "deduct", "expense"].forEach((k) => $("stat-" + k).classList.toggle("editing", editingStat === k));
+  ["income", "expense"].forEach((k) => $("stat-" + k).classList.toggle("editing", editingStat === k));
   $("s-close").textContent = fmt(left);
   $("s-close").className = "stat-value " + (left < 0 ? "neg" : "");
 
@@ -428,7 +456,7 @@ function renderCategories(periodTx, key) {
     if (editingCat === c.id) {
       const amountField = (show) => `<div class="edit-fixed ${show ? "" : "hidden"}">
           <label><span class="fixed-label">${income ? "סכום קבוע כל חודש (₪)" : "סכום שיורד כל חודש (₪)"}</span><input name="fixed" type="number" min="0" step="0.01" inputmode="decimal" value="${fixedAmount(c, key) || ""}" placeholder="ללא סכום קבוע" /></label>
-          <p class="muted hint">השינוי חל מהחודש הזה והלאה. חודשים קודמים לא משתנים.</p>
+          <p class="muted hint">${income ? "השינוי חל מהחודש הזה והלאה. חודשים קודמים לא משתנים." : "הסכום חל על כל החודשים, עד שתשנו אותו."}</p>
         </div>`;
       const budgetField = (show) => `<label class="edit-budget ${show ? "" : "hidden"}">תקציב חודשי (₪)<input name="budget" type="number" min="0" step="1" inputmode="decimal" value="${Number(c.budget) || ""}" placeholder="ללא תקציב" /></label>`;
       const kindField = income ? "" : `<label>סוג<select name="kind" data-kind-switch>
@@ -465,11 +493,12 @@ function renderCategories(periodTx, key) {
       const fixedAmt = fixedAmount(c, key);
       const extra = (income ? sumBy.income : sumBy.expense)[c.name] || 0;
       const what = income ? "נכנס כל חודש" : "יורד כל חודש";
+      const extraNote = income ? `נוסף החודש: ${fmt(extra)}` : `חיובים נוספים החודש: ${fmt(extra)} (נספרים בהוצאות)`;
       const status = fixedAmt > 0
-        ? `<span class="${income ? "pos" : ""}">${what}: <b>${fmt(fixedAmt)}</b></span>${extra ? `<span class="muted"> · נוסף החודש: ${fmt(extra)}</span>` : ""}`
+        ? `<span class="${income ? "pos" : ""}">${what}: <b>${fmt(fixedAmt)}</b></span>${extra ? `<span class="muted"> · ${extraNote}</span>` : ""}`
         : `<span class="muted">אין סכום קבוע. לחצו ✎ כדי להגדיר</span>`;
       return `<div class="tile ${income ? "income" : "deduct"}">${head}
-        <div class="tile-nums"><span class="num-big ${income ? "pos" : ""}">${fmt(fixedAmt + extra)}</span></div>
+        <div class="tile-nums"><span class="num-big ${income ? "pos" : ""}">${fmt(income ? fixedAmt + extra : fixedAmt)}</span></div>
         <div class="tile-status">${status}</div>${form}</div>`;
     }
 
@@ -491,7 +520,7 @@ function renderCategories(periodTx, key) {
   // One section per kind, each with its own subtotal
   const groupTotal = (kind, list) => list.reduce((s, c) => {
     if (kind === "expense") return s + (sumBy.expense[c.name] || 0);
-    return s + fixedAmount(c, key) + ((kind === "income" ? sumBy.income : sumBy.expense)[c.name] || 0);
+    return s + fixedAmount(c, key) + (kind === "income" ? sumBy.income[c.name] || 0 : 0);
   }, 0);
   $("cat-tiles").innerHTML = ["income", "fixed", "expense"].map((kind) => {
     const list = cats.filter((c) => kindOf(c) === kind);
@@ -706,25 +735,39 @@ function wireEvents() {
       toast(isNum(value) ? `${STAT_LABELS[kind]}: ${fmt(value)}` : "חזרה לחישוב האוטומטי מהקטגוריות");
     } catch (ex) { toast(ex.message, true); }
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && editingStat) { editingStat = null; render(); } });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !(editingStat || editingDeduct)) return;
+    editingStat = null; editingDeduct = null; render();
+  });
 
   // ----- Deductions drawer -----
   const stats = $("stat-income").parentElement;
   stats.addEventListener("click", (e) => {
+    const ed = e.target.closest("[data-dedit]");
+    if (ed) {
+      editingDeduct = ed.dataset.dedit; render();
+      document.querySelector(`[data-dform="${CSS.escape(editingDeduct)}"] input`)?.focus();
+      return;
+    }
+    if (e.target.closest("[data-dcancel]")) { editingDeduct = null; render(); return; }
+    const del = e.target.closest("[data-ddel]");
+    if (del) {
+      confirmClick(del, "בטוח?", async () => {
+        const cat = getCategories().find((c) => c.id === del.dataset.ddel);
+        try {
+          await saveCategories(getCategories().filter((c) => c.id !== del.dataset.ddel));
+          editingDeduct = null; render();
+          toast(`"${cat ? cat.name : ""}" נמחקה מהרשימה`);
+        } catch (ex) { toast(ex.message, true); }
+      });
+      return;
+    }
     if (!e.target.closest("[data-drawer]")) return;
     drawerOpen = !drawerOpen;
     try { localStorage.setItem("cashflow-drawer", drawerOpen ? "1" : "0"); } catch {}
     render();
   });
   stats.addEventListener("change", async (e) => {
-    const amtIn = e.target.closest("[data-amt]");
-    if (amtIn) {
-      const amount = Math.max(0, parseFloat(amtIn.value) || 0);
-      const cats = getCategories();
-      try { await saveCategories(cats.map((c) => (c.id === amtIn.dataset.amt ? { ...c, amounts: withAmountFrom(c, viewKey(), amount) } : c))); }
-      catch (ex) { toast(ex.message, true); }
-      return;
-    }
     const box = e.target.closest("[data-paid]");
     if (!box) return;
     const all = JSON.parse(JSON.stringify(settings.paid || {}));
@@ -734,6 +777,23 @@ function wireEvents() {
     catch (ex) { toast(ex.message, true); box.checked = !box.checked; }
   });
   stats.addEventListener("submit", async (e) => {
+    const df = e.target.closest("[data-dform]");
+    if (df) {
+      e.preventDefault();
+      const id = df.dataset.dform;
+      const name = df.name.value.trim();
+      const amount = Math.max(0, parseFloat(df.amount.value) || 0);
+      if (!name) return;
+      if (nameTaken(name, id)) { toast("כבר יש קטגוריה בשם הזה", true); return; }
+      const old = getCategories().find((c) => c.id === id);
+      try {
+        await saveCategories(getCategories().map((c) => (c.id === id ? { ...c, name, amounts: setFixedAmount(c, amount) } : c)));
+        if (old && old.name !== name && backend.renameCategory) await backend.renameCategory(user.uid, old.name, name);
+        editingDeduct = null; render();
+        toast("נשמר");
+      } catch (ex) { toast(ex.message, true); }
+      return;
+    }
     if (e.target.id !== "drawer-add") return;
     e.preventDefault();
     const f = e.target;
@@ -789,7 +849,9 @@ function wireEvents() {
       const old = cats.find((c) => c.id === id);
       const update = (c) => {
         const kind = f.kind ? f.kind.value : kindOf(c);
-        if (kind !== "expense") return { ...c, name, kind, amounts: withAmountFrom(c, viewKey(), Math.max(0, parseFloat(f.fixed.value) || 0)) };
+        const amount = f.fixed ? Math.max(0, parseFloat(f.fixed.value) || 0) : 0;
+        if (kind === "fixed") return { ...c, name, kind, amounts: setFixedAmount(c, amount) };
+        if (kind === "income") return { ...c, name, kind, amounts: withAmountFrom(c, viewKey(), amount) };
         return { ...c, name, kind, budget: Math.max(0, parseFloat(f.budget.value) || 0) };
       };
       try {
@@ -820,13 +882,13 @@ function wireEvents() {
           // Keep the category in earlier periods if it has history there; otherwise remove it outright.
           const from = effectiveDate(viewKey());
           const cat = getCategories().find((c) => c.id === del.dataset.delcat);
-          const hasHistory = cat && ((cat.amounts || []).some((h) => asDate(h.from) < from) || txs.some((t) => t.category === cat.name && t.date < from));
+          const hasHistory = cat && !isFixed(cat) && ((cat.amounts || []).some((h) => asDate(h.from) < from) || txs.some((t) => t.category === cat.name && t.date < from));
           const cats = hasHistory
             ? getCategories().map((c) => (c.id === cat.id ? { ...c, deletedFrom: from } : c))
             : getCategories().filter((c) => c.id !== del.dataset.delcat);
           await saveCategories(cats);
           editingCat = null; render();
-          toast("הקטגוריה נמחקה מהחודש הזה והלאה. חודשים קודמים לא משתנים");
+          toast(hasHistory ? "הקטגוריה נמחקה מהחודש הזה והלאה. חודשים קודמים לא משתנים" : "הקטגוריה נמחקה");
         } catch (ex) { toast(ex.message, true); }
       });
     }
