@@ -532,10 +532,10 @@ function renderCategories(periodTx, key) {
     const remaining = budget - spent;
     const level = budget > 0 && spent > budget ? "over" : pct >= 85 ? "warn" : "";
     const status = budget > 0
-      ? (remaining >= 0 ? `<span>נשאר <b>${fmt(remaining)}</b></span>` : `<span class="neg">חריגה של <b>${fmt(-remaining)}</b></span>`)
+      ? (remaining >= 0 ? `<span>נשאר <b>${fmt(remaining)}</b></span>` : `<span class="neg">⚠️ עברתם את התקציב</span>`)
       : `<span class="muted">ללא תקציב</span>`;
     return `<div class="tile ${level}">${head}
-      <div class="tile-nums"><span class="num-big">${fmt(spent)}</span>${budget > 0 ? `<span class="muted">מתוך ${fmt(budget)}</span>` : ""}</div>
+      <div class="tile-nums"><span class="num-big">${fmt(spent)}</span>${budget > 0 ? `<span class="muted">מתוך ${fmt(budget)}</span>` : ""}${level === "over" ? `<span class="over-badge">חרגתם ב-${fmt(-remaining)}</span>` : ""}</div>
       ${budget > 0 ? `<div class="cat-bar"><div class="${level}" style="width:${pct}%"></div></div>` : ""}
       <div class="tile-status">${status}</div>${form}</div>`;
   };
