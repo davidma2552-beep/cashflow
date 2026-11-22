@@ -218,10 +218,7 @@ let drawerOpen = false;
 try { drawerOpen = localStorage.getItem("cashflow-drawer") === "1"; } catch {}
 const paidFor = (key) => (settings.paid || {})[key] || {};
 
-function renderDrawer(key) {
-  const el = $("deduct-drawer");
-  el.classList.toggle("hidden", !drawerOpen);
-  if (!drawerOpen) return;
+function drawerHTML(key) {
   const items = getCategories().filter((c) => isFixed(c) && activeIn(c, key));
   const paid = paidFor(key);
   const done = items.filter((c) => paid[c.id]);
@@ -229,25 +226,24 @@ function renderDrawer(key) {
   const rows = items.map((c) => {
     const amt = fixedAmount(c, key);
     const ok = !!paid[c.id];
-    return `<label class="d-row ${ok ? "done" : ""}">
-      <input type="checkbox" data-paid="${esc(c.id)}" ${ok ? "checked" : ""} />
-      <span class="d-name">${esc(c.name)}</span>
-      <span class="d-amt"><input type="number" min="0" step="0.01" inputmode="decimal" data-amt="${esc(c.id)}" value="${amt || ""}" placeholder="סכום ₪" aria-label="סכום חודשי של ${esc(c.name)}" /></span>
-      <span class="d-status">${ok ? "ירד ✓" : "ממתין"}</span>
+    return `<label class="d-row ${ok ? "done" : ""}" title="${ok ? "ירד" : "ממתין"}">
+      <input type="checkbox" data-paid="${esc(c.id)}" ${ok ? "checked" : ""} aria-label="${esc(c.name)} ירד" />
+      <span class="d-name">${esc(c.name)}${ok ? ` <span class="d-ok">✓ ירד</span>` : ""}</span>
+      <input class="d-amt" type="number" min="0" step="0.01" inputmode="decimal" data-amt="${esc(c.id)}" value="${amt || ""}" placeholder="סכום ₪" aria-label="סכום חודשי של ${esc(c.name)}" />
     </label>`;
   }).join("");
-  el.innerHTML = `
-    <div class="row between drawer-head">
-      <b>🔁 ההורדות הקבועות של החודש</b>
-      <span class="muted">${items.length ? `ירדו ${done.length} מתוך ${items.length}${pending > 0 ? ` · עוד צפוי לרדת ${fmt(pending)}` : ""}` : ""}</span>
-    </div>
-    <div class="d-list">${rows || `<p class="muted">אין עדיין הורדות קבועות. הוסיפו את הראשונה למטה.</p>`}</div>
+  return `<div class="drawer">
+    <div class="drawer-sum muted">${items.length ? `ירדו ${done.length} מתוך ${items.length}${pending > 0 ? ` · עוד צפוי לרדת ${fmt(pending)}` : ""}` : "אין עדיין הורדות קבועות"}</div>
+    <div class="d-list">${rows}</div>
     <form id="drawer-add" class="drawer-add">
-      <input name="name" maxlength="40" required placeholder="שם ההורדה, למשל: סלולר, ביטוח, שכירות" aria-label="שם ההורדה" />
-      <input name="amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="סכום חודשי ₪" aria-label="סכום חודשי" />
-      <button type="submit" class="btn btn-primary btn-sm">+ הוספה</button>
+      <input name="name" maxlength="40" required placeholder="הורדה חדשה, למשל סלולר" aria-label="שם ההורדה" />
+      <div class="drawer-add-row">
+        <input name="amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="סכום ₪" aria-label="סכום חודשי" />
+        <button type="submit" class="btn btn-primary btn-sm">+ הוספה</button>
+      </div>
     </form>
-    <p class="muted hint">הסימון הוא לכל חודש בנפרד ומתאפס ביום האיפוס. שינוי סכום חל מהחודש הזה והלאה. כדי למחוק הורדה, לחצו ✎ בכרטיס שלה בקטגוריות.</p>`;
+    <p class="muted hint">הסימון מתאפס ביום האיפוס. שינוי סכום חל מהחודש הזה והלאה.</p>
+  </div>`;
 }
 
 // The month's totals. Deductions = fixed monthly amounts plus anything entered in a deduction category;
@@ -349,8 +345,10 @@ function render() {
   const paidCount = fixedCats.filter((c) => paidFor(key)[c.id]).length;
   const drawerBtn = `<button type="button" class="drawer-toggle ${drawerOpen ? "open" : ""}" data-drawer aria-expanded="${drawerOpen}">
       ${fixedCats.length ? `סומנו ${paidCount}/${fixedCats.length} · ` : ""}${drawerOpen ? "סגירת הרשימה ▴" : "פתיחת הרשימה ▾"}</button>`;
-  $("stat-deduct").innerHTML = statHTML("deduct", deduct, tot.auto.deduct, isNum(man.deduct), drawerBtn);
-  renderDrawer(key);
+  $("stat-deduct").innerHTML = statHTML("deduct", deduct, tot.auto.deduct, isNum(man.deduct), drawerBtn + (drawerOpen ? drawerHTML(key) : ""));
+  const showDrawer = drawerOpen && editingStat !== "deduct";
+  $("stat-deduct").classList.toggle("with-drawer", showDrawer);
+  $("stat-deduct").parentElement.classList.toggle("drawer-open", showDrawer);
   $("stat-expense").innerHTML = statHTML("expense", tot.expense, tot.auto.expense, isNum(man.expense));
   ["income", "deduct", "expense"].forEach((k) => $("stat-" + k).classList.toggle("editing", editingStat === k));
   $("s-close").textContent = fmt(left);
