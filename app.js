@@ -37,6 +37,7 @@ async function createFirebaseBackend() {
       await batch.commit();
     },
     removeTransaction: (uid, id) => F.deleteDoc(F.doc(db, "users", uid, "transactions", id)),
+    updateTransaction: (uid, id, data) => F.updateDoc(F.doc(db, "users", uid, "transactions", id), data),
     async renameCategory(uid, from, to) {
       const snap = await F.getDocs(F.query(txCol(uid), F.where("category", "==", from)));
       for (let i = 0; i < snap.docs.length; i += 400) {
@@ -96,6 +97,11 @@ function createDemoBackend() {
     async removeTransaction(uid, id) {
       const u = userData(uid);
       u.tx = u.tx.filter((t) => t.id !== id);
+      write(state); emitData(uid);
+    },
+    async updateTransaction(uid, id, data) {
+      const u = userData(uid);
+      u.tx = u.tx.map((t) => (t.id === id ? { ...t, ...data } : t));
       write(state); emitData(uid);
     },
     async renameCategory(uid, from, to) {
@@ -224,6 +230,7 @@ const STAT_CLS = { income: "pos", deduct: "neg", expense: "neg" };
 
 // ----- Deductions drawer: tick off each fixed deduction once it has come out this month -----
 let drawerOpen = false;
+let editingTx = null;
 try { drawerOpen = localStorage.getItem("cashflow-drawer") === "1"; } catch {}
 const paidFor = (key) => (settings.paid || {})[key] || {};
 
@@ -439,20 +446,45 @@ function render() {
       <td></td>
     </tr>`;
   });
+  // Fixed deductions only come off the running total once they are ticked as paid (same as "נשאר החודש")
+  const paidMap = paidFor(key);
   const deductRows = deductions.map(({ c, amount }) => {
-    bal -= amount;
-    return `<tr class="fixed out">
+    const paidNow = !!paidMap[c.id];
+    if (paidNow) bal -= amount;
+    return `<tr class="fixed out ${paidNow ? "" : "pending"}">
       <td>${dateCell(ymd(start))}</td>
       <td class="time"><span class="muted">—</span></td>
-      <td class="desc"><span class="muted">הורדה חודשית</span></td>
+      <td class="desc">${paidNow ? `<span class="muted">הורדה חודשית</span> <span class="d-ok">✓ ירד</span>` : `<span class="muted">הורדה חודשית · ממתין</span>`}</td>
       <td><span class="tag">${esc(c.name)}</span></td>
       <td class="num neg">−${fmt(amount)}</td>
-      <td class="num ${bal < 0 ? "neg" : ""}">${fmt(bal)}</td>
+      <td class="num ${bal < 0 ? "neg" : ""}">${paidNow ? fmt(bal) : `<span class="muted">—</span>`}</td>
       <td></td>
     </tr>`;
   });
+  const catOptions = (t) => {
+    const names = [...new Set([
+      ...(t.type === "income" ? ["הכנסה"] : getCategories().filter((c) => kindOf(c) !== "income" && activeIn(c, key)).map((c) => c.name)),
+      UNPLANNED, t.category,
+    ])];
+    return names.map((n) => `<option value="${esc(n)}" ${n === t.category ? "selected" : ""}>${esc(n)}</option>`).join("");
+  };
   const txRows = periodTx.map((t) => {
     bal += signed(t);
+    if (editingTx === t.id) {
+      return `<tr class="editing-row"><td colspan="7">
+        <form class="tx-edit" data-txform="${esc(t.id)}">
+          <label>תאריך<input name="date" type="date" required value="${esc(t.date)}" /></label>
+          <label>שעה<input name="time" type="time" value="${esc(txTime(t))}" /></label>
+          <label class="grow">תיאור<input name="desc" maxlength="100" value="${esc(t.description || "")}" placeholder="ללא תיאור" /></label>
+          <label>קטגוריה<select name="category">${catOptions(t)}</select></label>
+          <label>סכום (₪)<input name="amount" type="number" step="0.01" min="0.01" required inputmode="decimal" value="${Number(t.amount)}" /></label>
+          <div class="tx-edit-actions">
+            <button type="submit" class="btn btn-primary btn-sm">שמירה</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-txcancel>ביטול</button>
+          </div>
+        </form>
+      </td></tr>`;
+    }
     return `<tr class="${t.date > today ? "future" : ""}">
       <td>${dateCell(t.date)}</td>
       <td class="time">${txTime(t) || `<span class="muted">—</span>`}</td>
@@ -460,7 +492,7 @@ function render() {
       <td><span class="tag">${esc(t.category)}</span></td>
       <td class="num ${t.type === "income" ? "pos" : "neg"}">${t.type === "income" ? "+" : "−"}${fmt(Number(t.amount))}</td>
       <td class="num ${bal < 0 ? "neg" : ""}">${fmt(bal)}</td>
-      <td><button class="icon-btn" data-del="${esc(t.id)}" title="מחיקה" aria-label="מחיקה">✕</button></td>
+      <td class="row-actions"><button class="icon-btn edit-tx" data-txedit="${esc(t.id)}" title="עריכה" aria-label="עריכת התנועה">✎</button><button class="icon-btn" data-del="${esc(t.id)}" title="מחיקה" aria-label="מחיקה">✕</button></td>
     </tr>`;
   });
   $("tx-body").innerHTML = [...fixedRows, ...deductRows, ...txRows].join("");
@@ -704,6 +736,9 @@ function wireEvents() {
   };
 
   $("tx-body").onclick = (e) => {
+    const ed = e.target.closest("[data-txedit]");
+    if (ed) { editingTx = ed.dataset.txedit; render(); document.querySelector(".tx-edit input[name=desc]")?.focus(); return; }
+    if (e.target.closest("[data-txcancel]")) { editingTx = null; render(); return; }
     const btn = e.target.closest("[data-del]");
     if (!btn) return;
     confirmClick(btn, "למחוק?", () =>
@@ -770,8 +805,8 @@ function wireEvents() {
     } catch (ex) { toast(ex.message, true); }
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || !(editingStat || editingDeduct)) return;
-    editingStat = null; editingDeduct = null; render();
+    if (e.key !== "Escape" || !(editingStat || editingDeduct || editingTx)) return;
+    editingStat = null; editingDeduct = null; editingTx = null; render();
   });
 
   // ----- Deductions drawer -----
@@ -844,6 +879,23 @@ function wireEvents() {
   });
 
   // Income entered from the month's transactions card is added to the month's income
+  $("tx-body").addEventListener("submit", async (e) => {
+    const f = e.target.closest("[data-txform]");
+    if (!f) return;
+    e.preventDefault();
+    const amount = Math.round(parseFloat(f.amount.value) * 100) / 100;
+    if (!(amount > 0) || !f.date.value) return;
+    const data = { date: f.date.value, time: f.time.value || nowTime(), description: f.desc.value.trim(), category: f.category.value, amount };
+    try {
+      await backend.updateTransaction(user.uid, f.dataset.txform, data);
+      editingTx = null;
+      // Follow the transaction if it moved to another month
+      const [y, m] = periodOf(data.date).split("-").map(Number);
+      viewY = y; viewM = m - 1; render();
+      toast("התנועה עודכנה");
+    } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); }
+  });
+
   $("tx-income-form").onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;

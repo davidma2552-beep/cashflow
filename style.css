@@ -316,3 +316,16 @@ tr.fixed.out td { background: color-mix(in srgb, var(--neg) 6%, transparent); }
 .tx-income input[name=desc] { flex: 1 1 140px; }
 .tx-income input[name=amount] { flex: 0 1 110px; }
 @media (max-width: 520px) { .tx-income { width: 100%; } .tx-income input[name=desc] { flex-basis: 100%; } .tx-income input[name=amount] { flex: 1; } }
+
+tr.fixed.out.pending td { background: transparent; opacity: .6; }
+.row-actions { white-space: nowrap; }
+.edit-tx:hover { color: var(--primary) !important; }
+tr.editing-row td { background: color-mix(in srgb, var(--primary) 6%, transparent); white-space: normal; }
+.tx-edit { display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-end; }
+.tx-edit label { margin: 0; font-size: .78rem; }
+.tx-edit input, .tx-edit select { padding: .35rem .5rem; font-size: .9rem; width: auto; }
+.tx-edit label.grow { flex: 1 1 160px; }
+.tx-edit label.grow input { width: 100%; }
+.tx-edit input[name=amount] { width: 7rem; }
+.tx-edit-actions { display: flex; gap: .4rem; }
+@media (max-width: 520px) { .tx-edit { position: sticky; right: 0; width: calc(100vw - 64px); } .tx-edit label { flex: 1 1 45%; } .tx-edit input, .tx-edit select { width: 100%; } .tx-edit input[name=amount] { width: 100%; } }
