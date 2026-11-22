@@ -587,7 +587,7 @@ function renderChart(sorted) {
     m.bal = m.inc - m.out;
   }
 
-  const W = Math.max(480, Math.round($("chart").clientWidth) || 640), H = 260, L = 48, R = 8, T = 12, B = 28;
+  const W = Math.max(320, Math.round($("chart").clientWidth) || 640), H = W < 500 ? 220 : 260, L = 48, R = 8, T = 12, B = 28;
   const vals = months.flatMap((m) => [m.inc, m.out, m.bal]);
   let hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
   if (hi === lo) hi = lo + 1;
@@ -609,7 +609,7 @@ function renderChart(sorted) {
     return `
       <rect x="${cx(i) - bw - 1}" y="${y(m.inc)}" width="${bw}" height="${Math.max(0, zero - y(m.inc))}" rx="2" fill="var(--in-bar)"><title>${m.label}: הכנסות ${fmt(m.inc)}</title></rect>
       <rect x="${cx(i) + 1}" y="${y(m.out)}" width="${bw}" height="${Math.max(0, zero - y(m.out))}" rx="2" fill="var(--out-bar)"><title>${m.label}: הוצאות ${fmt(m.out)}</title></rect>
-      <text x="${cx(i)}" y="${H - 8}" text-anchor="middle" style="${sel ? "font-weight:700;fill:var(--text)" : ""}">${m.label}</text>`;
+      <text x="${cx(i)}" y="${H - 8}" text-anchor="middle" style="${sel ? "font-weight:700;fill:var(--text)" : ""}">${slot < 40 && !sel && (i - 5) % 2 ? "" : m.label}</text>`;
   }).join("");
   const line = months.map((m, i) => `${i ? "L" : "M"}${cx(i)},${y(m.bal)}`).join(" ");
   const dots = months.map((m, i) => `<circle cx="${cx(i)}" cy="${y(m.bal)}" r="3" fill="var(--bal)"><title>${m.label}: נשאר ${fmt(m.bal)}</title></circle>`).join("");

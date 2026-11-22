@@ -280,6 +280,23 @@ tr.fixed.out td { background: color-mix(in srgb, var(--neg) 6%, transparent); }
   .grid, .grid:last-child, .adders { grid-template-columns: 1fr; }
   .stat.with-drawer { grid-column: 1 / -1; }
   .stat-left { grid-column: 1 / -1; }
+  /* Same layout as the computer's narrow view: category cards two per row */
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
   .stat-value { font-size: 1.2rem; }
   #user-email { display: none; }
+}
+
+/* Phones: keep two cards per row, just more compact */
+@media (max-width: 520px) {
+  .container { padding: 1rem .75rem 2.5rem; }
+  .card { padding: .9rem .85rem; }
+  .tile { padding: .65rem .6rem; gap: .35rem; }
+  .tile-head strong { font-size: .92rem; }
+  .num-big { font-size: 1.05rem; }
+  .tile-nums, .tile-status { font-size: .78rem; }
+  .quick-row { flex-direction: column; }
+  .quick input { font-size: .85rem; padding: .4rem .45rem; }
+  .quick .btn { width: 100%; }
+  .stat { padding: .75rem .8rem; }
+  .stat-value { font-size: 1.15rem; }
 }
