@@ -271,11 +271,16 @@ function periodTotals(key, periodTx) {
   const auto = {
     income: fixedItems(key, "income").reduce((s, x) => s + x.amount, 0) + sum(periodTx.filter((t) => t.type === "income")),
     deduct: fixedItems(key, "fixed").reduce((s, x) => s + x.amount, 0),
-    expense: sum(periodTx.filter((t) => t.type === "expense")),
+    // What actually went out: deductions ticked as paid plus every expense entered
+    paidDeduct: getCategories().filter((c) => isFixed(c) && activeIn(c, key) && paidFor(key)[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0),
+    personal: sum(periodTx.filter((t) => t.type === "expense")),
   };
+  auto.expense = auto.paidDeduct + auto.personal;
   const man = manualFor(key);
   const pick = (k) => (isNum(man[k]) ? man[k] : auto[k]);
-  return { auto, man, income: pick("income"), deduct: auto.deduct, expense: pick("expense") };
+  // Planned outflow for the chart: every deduction (paid or not) plus expenses entered
+  const planned = isNum(man.expense) ? man.expense : auto.deduct + auto.personal;
+  return { auto, man, income: pick("income"), deduct: auto.deduct, expense: pick("expense"), planned };
 }
 
 function statHTML(kind, value, auto, manual, note = "") {
@@ -290,11 +295,11 @@ function statHTML(kind, value, auto, manual, note = "") {
           <button type="button" class="btn btn-ghost btn-sm" data-stat-cancel>ביטול</button>
         </div>
       </form>
-      <div class="stat-note">החישוב מהקטגוריות: ${fmt(auto)}</div>`;
+      <div class="stat-note">החישוב האוטומטי: ${fmt(auto)}</div>`;
   }
   return `<div class="stat-label row between"><span>${label}</span><button class="icon-btn edit-stat" data-stat-edit="${kind}" title="הזנה ידנית" aria-label="הזנה ידנית של ${label}">✎</button></div>
     <button class="stat-value as-btn ${STAT_CLS[kind]}" data-stat-edit="${kind}" title="לחצו כדי להזין סכום">${fmt(value)}</button>
-    <div class="stat-note">${manual ? `<span class="tag manual">הוזן ידנית</span>` : "מחושב מהקטגוריות · לחצו להזנה ידנית"}</div>${note}`;
+    <div class="stat-note">${manual ? `<span class="tag manual">הוזן ידנית</span>` : (kind === "expense" ? "מה שירד בפועל · לחצו להזנה ידנית" : "מחושב מהקטגוריות · לחצו להזנה ידנית")}</div>${note}`;
 }
 const UNPLANNED = "לא צפוי";
 
@@ -359,7 +364,7 @@ function render() {
   const deductions = fixedItems(key, "fixed");
   const tot = periodTotals(key, periodTx);
   const { income, deduct, man } = tot;
-  const expense = deduct + tot.expense; // everything that went out
+  const expense = tot.expense; // what has gone out so far: ticked deductions + expenses entered
   const left = income - expense;
 
   const afterDeduct = deduct > 0
@@ -383,7 +388,8 @@ function render() {
   const showDrawer = drawerOpen;
   $("stat-deduct").classList.toggle("with-drawer", showDrawer);
   $("stat-deduct").parentElement.classList.toggle("drawer-open", showDrawer);
-  $("stat-expense").innerHTML = statHTML("expense", tot.expense, tot.auto.expense, isNum(man.expense));
+  const outNote = isNum(man.expense) ? "" : `<div class="stat-note">הורדות שירדו ${fmt(tot.auto.paidDeduct)} · הוצאות ${fmt(tot.auto.personal)}</div>`;
+  $("stat-expense").innerHTML = statHTML("expense", tot.expense, tot.auto.expense, isNum(man.expense), outNote);
   ["income", "expense"].forEach((k) => $("stat-" + k).classList.toggle("editing", editingStat === k));
   $("s-close").textContent = fmt(left);
   $("s-close").className = "stat-value " + (left < 0 ? "neg" : "");
@@ -573,7 +579,7 @@ function renderChart(sorted) {
     const d = new Date(viewY, viewM + i, 1);
     const key = monthKey(d.getFullYear(), d.getMonth());
     const t = periodTotals(key, sorted.filter((x) => periodOf(x.date) === key));
-    months.push({ key, label: HE_MONTHS[d.getMonth()].slice(0, 3) + "׳" + String(d.getFullYear()).slice(2), inc: t.income, out: t.deduct + t.expense });
+    months.push({ key, label: HE_MONTHS[d.getMonth()].slice(0, 3) + "׳" + String(d.getFullYear()).slice(2), inc: t.income, out: t.planned });
   }
   for (const m of months) {
     m.bal = m.inc - m.out;
