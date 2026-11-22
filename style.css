@@ -132,6 +132,29 @@ tr.fixed td { background: color-mix(in srgb, var(--pos) 6%, transparent); }
 .stat-edit .row { flex-wrap: wrap; }
 .stat-edit { display: flex; flex-direction: column; gap: .4rem; margin-top: .3rem; }
 .stat-edit input { font-size: 1.15rem; font-weight: 700; }
+.stat.drawer { grid-column: 1 / -1; border-color: color-mix(in srgb, var(--neg) 35%, var(--border)); }
+.drawer-head { margin-bottom: .6rem; }
+.drawer-toggle {
+  margin-top: .5rem; width: 100%; font: inherit; font-size: .85rem; cursor: pointer; border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--neg) 35%, var(--border)); background: color-mix(in srgb, var(--neg) 6%, transparent);
+  color: var(--text); padding: .35rem .6rem;
+}
+.drawer-toggle:hover, .drawer-toggle.open { background: color-mix(in srgb, var(--neg) 12%, transparent); }
+.d-list { display: flex; flex-direction: column; }
+.d-row {
+  display: grid; grid-template-columns: auto 1fr auto 4.5rem; align-items: center; gap: .75rem;
+  padding: .55rem .25rem; border-bottom: 1px solid var(--border); margin: 0; color: var(--text); font-size: .95rem; cursor: pointer;
+}
+.d-row input { width: 1.25rem; height: 1.25rem; accent-color: var(--pos); cursor: pointer; }
+.d-amt input { width: 7.5rem; padding: .3rem .5rem; font-variant-numeric: tabular-nums; font-weight: 500; background: var(--card); }
+.d-row.done .d-amt input { text-decoration: line-through; color: var(--muted); }
+.d-status { font-size: .8rem; color: var(--muted); text-align: left; }
+.d-row.done .d-name { text-decoration: line-through; color: var(--muted); }
+.d-row.done .d-status { color: var(--pos); font-weight: 700; }
+.drawer-add { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .8rem; }
+.drawer-add input[name=name] { flex: 2 1 200px; width: auto; }
+.drawer-add input[name=amount] { flex: 1 1 110px; width: auto; }
+.stat.drawer .hint { margin: .6rem 0 0; }
 .stat.usage { grid-column: 1 / -1; display: flex; flex-direction: column; gap: .5rem; }
 .usage-bar { height: 10px; margin: 0; }
 .pos { color: var(--pos); }

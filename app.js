@@ -213,6 +213,43 @@ let editingStat = null;
 const STAT_LABELS = { income: "הכנסות החודש", deduct: "הורדות חודשיות קבועות", expense: "הוצאות החודש" };
 const STAT_CLS = { income: "pos", deduct: "neg", expense: "neg" };
 
+// ----- Deductions drawer: tick off each fixed deduction once it has come out this month -----
+let drawerOpen = false;
+try { drawerOpen = localStorage.getItem("cashflow-drawer") === "1"; } catch {}
+const paidFor = (key) => (settings.paid || {})[key] || {};
+
+function renderDrawer(key) {
+  const el = $("deduct-drawer");
+  el.classList.toggle("hidden", !drawerOpen);
+  if (!drawerOpen) return;
+  const items = getCategories().filter((c) => isFixed(c) && activeIn(c, key));
+  const paid = paidFor(key);
+  const done = items.filter((c) => paid[c.id]);
+  const pending = items.filter((c) => !paid[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0);
+  const rows = items.map((c) => {
+    const amt = fixedAmount(c, key);
+    const ok = !!paid[c.id];
+    return `<label class="d-row ${ok ? "done" : ""}">
+      <input type="checkbox" data-paid="${esc(c.id)}" ${ok ? "checked" : ""} />
+      <span class="d-name">${esc(c.name)}</span>
+      <span class="d-amt"><input type="number" min="0" step="0.01" inputmode="decimal" data-amt="${esc(c.id)}" value="${amt || ""}" placeholder="סכום ₪" aria-label="סכום חודשי של ${esc(c.name)}" /></span>
+      <span class="d-status">${ok ? "ירד ✓" : "ממתין"}</span>
+    </label>`;
+  }).join("");
+  el.innerHTML = `
+    <div class="row between drawer-head">
+      <b>🔁 ההורדות הקבועות של החודש</b>
+      <span class="muted">${items.length ? `ירדו ${done.length} מתוך ${items.length}${pending > 0 ? ` · עוד צפוי לרדת ${fmt(pending)}` : ""}` : ""}</span>
+    </div>
+    <div class="d-list">${rows || `<p class="muted">אין עדיין הורדות קבועות. הוסיפו את הראשונה למטה.</p>`}</div>
+    <form id="drawer-add" class="drawer-add">
+      <input name="name" maxlength="40" required placeholder="שם ההורדה, למשל: סלולר, ביטוח, שכירות" aria-label="שם ההורדה" />
+      <input name="amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="סכום חודשי ₪" aria-label="סכום חודשי" />
+      <button type="submit" class="btn btn-primary btn-sm">+ הוספה</button>
+    </form>
+    <p class="muted hint">הסימון הוא לכל חודש בנפרד ומתאפס ביום האיפוס. שינוי סכום חל מהחודש הזה והלאה. כדי למחוק הורדה, לחצו ✎ בכרטיס שלה בקטגוריות.</p>`;
+}
+
 // The month's totals. Deductions = fixed monthly amounts plus anything entered in a deduction category;
 // expenses = everything else that went out. A total the user typed in replaces the calculated one.
 function periodTotals(key, periodTx) {
@@ -308,7 +345,12 @@ function render() {
     ? `<div class="after-deduct">אחרי ההורדות הקבועות: <b class="${income - deduct < 0 ? "neg" : ""}">${fmt(income - deduct)}</b></div>`
     : "";
   $("stat-income").innerHTML = statHTML("income", income, tot.auto.income, isNum(man.income), afterDeduct);
-  $("stat-deduct").innerHTML = statHTML("deduct", deduct, tot.auto.deduct, isNum(man.deduct));
+  const fixedCats = getCategories().filter((c) => isFixed(c) && activeIn(c, key));
+  const paidCount = fixedCats.filter((c) => paidFor(key)[c.id]).length;
+  const drawerBtn = `<button type="button" class="drawer-toggle ${drawerOpen ? "open" : ""}" data-drawer aria-expanded="${drawerOpen}">
+      ${fixedCats.length ? `סומנו ${paidCount}/${fixedCats.length} · ` : ""}${drawerOpen ? "סגירת הרשימה ▴" : "פתיחת הרשימה ▾"}</button>`;
+  $("stat-deduct").innerHTML = statHTML("deduct", deduct, tot.auto.deduct, isNum(man.deduct), drawerBtn);
+  renderDrawer(key);
   $("stat-expense").innerHTML = statHTML("expense", tot.expense, tot.auto.expense, isNum(man.expense));
   ["income", "deduct", "expense"].forEach((k) => $("stat-" + k).classList.toggle("editing", editingStat === k));
   $("s-close").textContent = fmt(left);
@@ -667,6 +709,47 @@ function wireEvents() {
     } catch (ex) { toast(ex.message, true); }
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && editingStat) { editingStat = null; render(); } });
+
+  // ----- Deductions drawer -----
+  const stats = $("stat-income").parentElement;
+  stats.addEventListener("click", (e) => {
+    if (!e.target.closest("[data-drawer]")) return;
+    drawerOpen = !drawerOpen;
+    try { localStorage.setItem("cashflow-drawer", drawerOpen ? "1" : "0"); } catch {}
+    render();
+  });
+  stats.addEventListener("change", async (e) => {
+    const amtIn = e.target.closest("[data-amt]");
+    if (amtIn) {
+      const amount = Math.max(0, parseFloat(amtIn.value) || 0);
+      const cats = getCategories();
+      try { await saveCategories(cats.map((c) => (c.id === amtIn.dataset.amt ? { ...c, amounts: withAmountFrom(c, viewKey(), amount) } : c))); }
+      catch (ex) { toast(ex.message, true); }
+      return;
+    }
+    const box = e.target.closest("[data-paid]");
+    if (!box) return;
+    const all = JSON.parse(JSON.stringify(settings.paid || {}));
+    const key = viewKey();
+    all[key] = { ...(all[key] || {}), [box.dataset.paid]: box.checked };
+    try { await backend.saveSettings(user.uid, { paid: all }); }
+    catch (ex) { toast(ex.message, true); box.checked = !box.checked; }
+  });
+  stats.addEventListener("submit", async (e) => {
+    if (e.target.id !== "drawer-add") return;
+    e.preventDefault();
+    const f = e.target;
+    const name = f.name.value.trim();
+    const amount = Math.max(0, parseFloat(f.amount.value) || 0);
+    if (!name) return;
+    if (nameTaken(name)) { toast("כבר יש קטגוריה בשם הזה", true); return; }
+    const cat = { id: newId(), name, kind: "fixed", budget: 0, amounts: amount > 0 ? [{ from: effectiveDate(viewKey()), amount }] : [] };
+    try {
+      await saveCategories([...getCategories(), cat]);
+      toast(`"${name}" נוספה להורדות הקבועות`);
+      document.querySelector("#drawer-add input[name=name]")?.focus();
+    } catch (ex) { toast(ex.message, true); }
+  });
 
   $("unplanned-form").onsubmit = async (e) => {
     e.preventDefault();
