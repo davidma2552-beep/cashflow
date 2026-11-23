@@ -895,7 +895,7 @@ function onUser(u) {
     if (fresh) ready.settings = true;
     if (!viewInit) { viewInit = true; goToCurrentPeriod(); }
     if (settings.theme && JSON.stringify(settings.theme) !== JSON.stringify(theme)) {
-      theme = { ...theme, ...settings.theme };
+      theme = normalizeTheme({ ...theme, ...settings.theme });
       try { localStorage.setItem("cashflow-theme", JSON.stringify(theme)); } catch {}
       applyTheme();
     }
@@ -1258,29 +1258,40 @@ function wireEvents() {
 const THEME_MODES = [
   { id: "auto", label: "אוטומטי", sw: "linear-gradient(135deg,#f5f6f8 50%,#0f1218 50%)" },
   { id: "light", label: "בהיר", sw: "#f5f6f8" },
-  { id: "cream", label: "שמנת", sw: "#f6f1e7" },
   { id: "dark", label: "כהה", sw: "#181c24" },
-  { id: "night", label: "לילה", sw: "#10213f" },
 ];
+// Each color paints the whole site: background, boxes, borders and buttons
 const ACCENTS = [
+  { id: "none", label: "ללא צבע", c: "#2563eb", neutral: true },
   { id: "blue", label: "כחול", c: "#2563eb" }, { id: "sky", label: "תכלת", c: "#0284c7" }, { id: "teal", label: "טורקיז", c: "#0d9488" },
   { id: "green", label: "ירוק", c: "#16a34a" }, { id: "lime", label: "ליים", c: "#65a30d" }, { id: "amber", label: "צהוב", c: "#d97706" },
   { id: "orange", label: "כתום", c: "#ea580c" }, { id: "red", label: "אדום", c: "#dc2626" }, { id: "pink", label: "ורוד", c: "#db2777" },
-  { id: "purple", label: "סגול", c: "#9333ea" }, { id: "indigo", label: "אינדיגו", c: "#4f46e5" }, { id: "slate", label: "אפור", c: "#475569" },
+  { id: "purple", label: "סגול", c: "#9333ea" }, { id: "indigo", label: "אינדיגו", c: "#4f46e5" }, { id: "brown", label: "חום", c: "#92400e" },
+  { id: "olive", label: "זית", c: "#4d7c0f" }, { id: "wine", label: "בורדו", c: "#9f1239" }, { id: "slate", label: "אפור", c: "#64748b" },
 ];
-let theme = { mode: "dark", accent: "blue" };
+let theme = { mode: "dark", accent: "none" };
 try { theme = { ...theme, ...JSON.parse(localStorage.getItem("cashflow-theme") || "{}") }; } catch {}
 const darkMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+// Older choices: "night" was dark blue, "cream" was light amber, "slate" was gray
+function normalizeTheme(t) {
+  const out = { ...t };
+  if (out.mode === "night") { out.mode = "dark"; if (!out.accent || out.accent === "none") out.accent = "blue"; }
+  if (out.mode === "cream") { out.mode = "light"; if (!out.accent || out.accent === "none") out.accent = "amber"; }
+  if (!THEME_MODES.some((m) => m.id === out.mode)) out.mode = "dark";
+  if (!ACCENTS.some((a) => a.id === out.accent)) out.accent = "none";
+  return out;
+}
+theme = normalizeTheme(theme);
 
 function applyTheme() {
   const root = document.documentElement;
   const mode = theme.mode === "auto" ? (darkMq && darkMq.matches ? "dark" : "light") : theme.mode;
   root.dataset.theme = mode;
-  const acc = ACCENTS.find((a) => a.id === theme.accent);
-  if (acc) { root.style.setProperty("--primary", acc.c); root.style.setProperty("--bal", acc.c); }
-  else { root.style.removeProperty("--primary"); root.style.removeProperty("--bal"); }
+  const acc = ACCENTS.find((a) => a.id === theme.accent) || ACCENTS[0];
+  if (acc.neutral) { delete root.dataset.tint; root.style.removeProperty("--tint"); root.style.removeProperty("--primary"); root.style.removeProperty("--bal"); }
+  else { root.dataset.tint = acc.id; root.style.setProperty("--tint", acc.c); root.style.setProperty("--primary", acc.c); root.style.setProperty("--bal", acc.c); }
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = getComputedStyle(root).getPropertyValue("--bg").trim();
+  if (meta) meta.content = getComputedStyle(root).getPropertyValue("--card").trim() || "#181c24";
   renderThemePicker();
 }
 function renderThemePicker() {
@@ -1288,7 +1299,12 @@ function renderThemePicker() {
   if (!modes) return;
   modes.innerHTML = THEME_MODES.map((m) => `<button type="button" class="mode-btn ${theme.mode === m.id ? "on" : ""}" data-mode="${m.id}" aria-pressed="${theme.mode === m.id}">
       <span class="mode-sw" style="background:${m.sw}"></span>${m.label}</button>`).join("");
-  accents.innerHTML = ACCENTS.map((a) => `<button type="button" class="acc-btn ${theme.accent === a.id ? "on" : ""}" data-accent="${a.id}" style="--c:${a.c}" title="${a.label}" aria-label="${a.label}" aria-pressed="${theme.accent === a.id}"></button>`).join("");
+  const dark = document.documentElement.dataset.theme === "dark";
+  accents.innerHTML = ACCENTS.map((a) => {
+    const bg = a.neutral ? (dark ? "#0f1218" : "#f5f6f8") : `color-mix(in srgb, ${a.c} ${dark ? 22 : 16}%, ${dark ? "#05070b" : "#ffffff"})`;
+    return `<button type="button" class="acc-btn ${theme.accent === a.id ? "on" : ""}" data-accent="${a.id}" style="--c:${a.c};--bgc:${bg}" aria-pressed="${theme.accent === a.id}">
+      <span class="acc-sw"><span class="acc-dot"></span></span><span class="acc-label">${a.label}</span></button>`;
+  }).join("");
 }
 function setTheme(patch) {
   theme = { ...theme, ...patch };

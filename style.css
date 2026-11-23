@@ -530,3 +530,33 @@ body.sheet-open { overflow: hidden; }
   .bd-name { grid-area: name; } .bd-amt { grid-area: amt; } .bd-track { grid-area: track; }
 }
 .stat-note.compare:not(:empty) { margin-top: .35rem; padding-top: .35rem; border-top: 1px dashed var(--border); }
+
+/* ---------- Whole-site color (data-tint + --tint on <html>) ---------- */
+:root[data-theme="dark"][data-tint] {
+  --bg: color-mix(in srgb, var(--tint) 20%, #05070b);
+  --card: color-mix(in srgb, var(--tint) 27%, #0d1118);
+  --border: color-mix(in srgb, var(--tint) 42%, #1b2130);
+  --muted: color-mix(in srgb, var(--tint) 28%, #a3acbb);
+  --text: color-mix(in srgb, var(--tint) 6%, #eef1f6);
+}
+:root[data-theme="light"][data-tint] {
+  --bg: color-mix(in srgb, var(--tint) 16%, #ffffff);
+  --card: color-mix(in srgb, var(--tint) 5%, #ffffff);
+  --border: color-mix(in srgb, var(--tint) 30%, #e3e6eb);
+  --muted: color-mix(in srgb, var(--tint) 35%, #5b6472);
+  --text: color-mix(in srgb, var(--tint) 12%, #1c2230);
+}
+.topbar { background: var(--card); }
+
+/* Color picker swatches: a mini preview of the whole site in that color */
+.theme-accents { grid-template-columns: repeat(4, 1fr) !important; gap: .45rem !important; }
+.acc-btn {
+  width: auto !important; height: auto !important; border-radius: 10px !important; background: transparent !important;
+  border: 1px solid var(--border) !important; box-shadow: none !important; padding: .3rem .2rem !important;
+  display: flex; flex-direction: column; align-items: center; gap: .25rem; font: inherit; color: var(--text); cursor: pointer;
+}
+.acc-btn.on { border-color: var(--primary) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 40%, transparent) !important; }
+.acc-sw { width: 2.4rem; height: 1.7rem; border-radius: 7px; background: var(--bgc); border: 1px solid rgba(128,128,128,.35); display: grid; place-items: center; }
+.acc-dot { width: .8rem; height: .8rem; border-radius: 50%; background: var(--c); }
+.acc-label { font-size: .7rem; line-height: 1.1; }
+.theme-pop { width: 19rem; }
