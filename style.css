@@ -403,3 +403,17 @@ body.sheet-open { overflow: hidden; }
 .tile-add:hover { background: color-mix(in srgb, var(--primary) 26%, transparent); }
 .stat-left .usage-bar { margin: .45rem 0 .35rem; }
 #usage-pct { font-size: .8rem; color: var(--muted); }
+
+/* Where the money went */
+.breakdown { display: flex; flex-direction: column; gap: .55rem; margin-top: .6rem; }
+.bd-row { display: grid; grid-template-columns: minmax(6.5rem, 9rem) 1fr auto; align-items: center; gap: .75rem; }
+.bd-name { display: flex; gap: .35rem; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .92rem; }
+.bd-track { height: 10px; background: var(--bg); border-radius: 99px; overflow: hidden; }
+.bd-fill { height: 100%; background: var(--out-bar); border-radius: 99px; }
+.bd-amt { display: flex; gap: .5rem; align-items: baseline; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .9rem; }
+.bd-amt .muted { font-size: .8rem; min-width: 2.4rem; text-align: left; }
+@media (max-width: 520px) {
+  .bd-row { grid-template-columns: 1fr auto; grid-template-areas: "name amt" "track track"; row-gap: .3rem; }
+  .bd-name { grid-area: name; } .bd-amt { grid-area: amt; } .bd-track { grid-area: track; }
+}
+.stat-note.compare:not(:empty) { margin-top: .35rem; padding-top: .35rem; border-top: 1px dashed var(--border); }

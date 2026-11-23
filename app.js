@@ -614,7 +614,58 @@ function render() {
 
   const unplanned = periodTx.filter((t) => t.category === UNPLANNED && t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   $("unplanned-sum").textContent = unplanned > 0 ? `החודש: ${fmt(unplanned)}` : "";
+  renderBreakdown(periodTx, key);
+  renderCompare(sorted, key);
   renderChart(sorted);
+}
+
+// ----- Where the money went this month: one bar per category, largest first -----
+function renderBreakdown(periodTx, key) {
+  const by = {};
+  periodTx.filter((t) => t.type === "expense").forEach((t) => { by[t.category] = (by[t.category] || 0) + Number(t.amount); });
+  const rows = Object.entries(by).map(([name, amount]) => ({ name, icon: iconForName(name), amount }));
+  // Fixed deductions that have come out this month, as one row
+  const paidDeduct = getCategories().filter((c) => isFixed(c) && activeIn(c, key) && paidFor(key)[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0);
+  if (paidDeduct > 0) rows.push({ name: "הורדות קבועות", icon: "🔁", amount: paidDeduct });
+  rows.sort((a, b) => b.amount - a.amount);
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  $("breakdown-total").textContent = total > 0 ? `סה״כ ${fmt(total)}` : "";
+  if (!total) { $("breakdown").innerHTML = `<p class="muted center chart-empty">כשתוסיפו הוצאות החודש, תראו כאן על מה הלך הכסף.</p>`; return; }
+  const max = rows[0].amount;
+  $("breakdown").innerHTML = rows.map((r) => {
+    const pct = Math.round((r.amount / total) * 100);
+    return `<div class="bd-row">
+      <div class="bd-name"><span aria-hidden="true">${r.icon}</span>${esc(r.name)}</div>
+      <div class="bd-track"><div class="bd-fill" style="width:${(r.amount / max) * 100}%"></div></div>
+      <div class="bd-amt"><b>${fmt(r.amount)}</b><span class="muted"><bdi dir="ltr">${pct}%</bdi></span></div>
+    </div>`;
+  }).join("");
+}
+
+// ----- Personal expenses compared with the previous month -----
+// For the month in progress, compare up to the same day of the previous month, so a half month isn't set against a whole one.
+function renderCompare(sorted, key) {
+  const [y, m] = key.split("-").map(Number);
+  const p = new Date(y, m - 2, 1);
+  const prevKey = monthKey(p.getFullYear(), p.getMonth());
+  const spend = (list) => list.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  const prevTx = sorted.filter((t) => periodOf(t.date) === prevKey);
+  const curTx = sorted.filter((t) => periodOf(t.date) === key);
+  if (!prevTx.some((t) => t.type === "expense")) { $("s-compare").innerHTML = ""; return; }
+  const inProgress = periodOf(todayStr()) === key;
+  let prev = spend(prevTx), cur = spend(curTx), when = "מבחודש שעבר";
+  if (inProgress) {
+    const [start] = rangeOfKey(key), [pStart] = rangeOfKey(prevKey);
+    const days = Math.round((new Date(todayStr()) - new Date(ymd(start))) / 86400000);
+    const cutoff = new Date(pStart); cutoff.setDate(cutoff.getDate() + days);
+    prev = spend(prevTx.filter((t) => t.date <= ymd(cutoff)));
+    cur = spend(curTx.filter((t) => t.date <= todayStr()));
+    when = "מאשר עד אותו יום בחודש שעבר";
+  }
+  const diff = Math.round((cur - prev) * 100) / 100;
+  $("s-compare").innerHTML = Math.abs(diff) < 1
+    ? `הוצאות משתנות: בערך כמו ${inProgress ? "עד אותו יום בחודש שעבר" : "בחודש שעבר"}`
+    : `הוצאות משתנות: <b class="${diff > 0 ? "neg" : "pos"}">${diff > 0 ? "▲" : "▼"} ${fmt(Math.abs(diff))} ${diff > 0 ? "יותר" : "פחות"}</b> ${when}`;
 }
 
 function renderCategories(periodTx, key) {

@@ -8,7 +8,7 @@
   <title>תזרים מזומנים</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=2026112301" />
+  <link rel="stylesheet" href="style.css?v=2026112302" />
 </head>
 <body>
   <div id="demo-banner" class="banner hidden">
@@ -70,6 +70,7 @@
           <div id="s-close" class="stat-value"></div>
           <div class="cat-bar usage-bar"><div id="usage-bar"></div></div>
           <div id="s-close-note" class="stat-note"></div>
+          <div id="s-compare" class="stat-note compare"></div>
         </div>
       </div>
 
@@ -130,6 +131,16 @@
       <div class="section">
         <div class="card">
           <div class="row between">
+            <h3>על מה הלך הכסף החודש</h3>
+            <span id="breakdown-total" class="muted"></span>
+          </div>
+          <div id="breakdown" class="breakdown"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="card">
+          <div class="row between">
             <h3>תזרים 12 חודשים</h3>
             <div id="chart-legend" class="legend"><span class="dot in"></span>הכנסות <span class="dot out"></span>הוצאות <span class="dot bal"></span>נשאר בכל חודש</div>
           </div>
@@ -167,6 +178,6 @@
   <div id="toast" class="toast hidden" role="status"></div>
   <div id="loading" class="loading">טוען…</div>
 
-  <script type="module" src="app.js?v=2026112301"></script>
+  <script type="module" src="app.js?v=2026112302"></script>
 </body>
 </html>
