@@ -393,3 +393,5 @@ tr.editing-row td { background: color-mix(in srgb, var(--primary) 6%, transparen
 body.sheet-open { overflow: hidden; }
 
 .tile.editing { grid-column: 1 / -1; }
+
+.chart-empty { padding: 2.5rem 1rem; margin: 0; }

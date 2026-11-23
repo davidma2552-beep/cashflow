@@ -534,7 +534,7 @@ function render() {
   const pct = income > 0 ? (expense / income) * 100 : expense > 0 ? 100 : 0;
   $("usage-text").innerHTML = income > 0 || expense > 0
     ? `הוצאתם <b>${fmt(expense)}</b> מתוך <b>${fmt(income)}</b> שהכנסתם`
-    : `<span class="muted">עוד אין הכנסות בחודש הזה. הגדירו סכום קבוע בקטגוריית הכנסה (✎), או הוסיפו הכנסה.</span>`;
+    : `<span class="muted">עוד אין הכנסות בחודש הזה. לחצו על "הכנסות החודש" למעלה כדי להזין את ההכנסה החודשית.</span>`;
   $("usage-pct").textContent = income > 0 ? `${Math.round(pct)}%` : "";
   $("usage-bar").style.width = Math.min(100, pct) + "%";
   $("usage-bar").className = expense > income ? "over" : pct >= 85 ? "warn" : "";
@@ -776,6 +776,10 @@ function renderChart(sorted) {
     m.bal = m.inc - m.out;
   }
 
+  // Nothing to show yet: a short note instead of an empty chart
+  const empty = months.every((m) => !m.inc && !m.out);
+  $("chart-legend").classList.toggle("hidden", empty);
+  if (empty) { $("chart").innerHTML = `<p class="muted center chart-empty">הגרף יופיע אחרי שתזינו הכנסה או תוסיפו הוצאות.</p>`; return; }
   const W = Math.max(320, Math.round($("chart").clientWidth) || 640), H = W < 500 ? 220 : 260, L = 48, R = 8, T = 12, B = 28;
   const vals = months.flatMap((m) => [m.inc, m.out, m.bal]);
   let hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);

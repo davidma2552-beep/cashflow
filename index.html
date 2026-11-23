@@ -120,6 +120,9 @@
             </table>
           </div>
           <p id="empty" class="muted center hidden">אין תנועות בחודש הזה עדיין.</p>
+          <div class="row settings-row">
+            <button id="export-btn" class="btn btn-ghost btn-sm" title="מוריד את כל התנועות מכל החודשים כקובץ שנפתח באקסל">⬇️ ייצוא כל התנועות ל-CSV</button>
+          </div>
         </div>
       </div>
 
@@ -127,12 +130,9 @@
         <div class="card">
           <div class="row between">
             <h3>תזרים 12 חודשים</h3>
-            <div class="legend"><span class="dot in"></span>הכנסות <span class="dot out"></span>הוצאות <span class="dot bal"></span>נשאר בכל חודש</div>
+            <div id="chart-legend" class="legend"><span class="dot in"></span>הכנסות <span class="dot out"></span>הוצאות <span class="dot bal"></span>נשאר בכל חודש</div>
           </div>
           <div id="chart" class="chart"></div>
-          <div class="row settings-row">
-            <button id="export-btn" class="btn btn-ghost btn-sm">ייצוא ל-CSV</button>
-          </div>
         </div>
       </div>
 
