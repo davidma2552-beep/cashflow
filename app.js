@@ -1269,7 +1269,21 @@ const ACCENTS = [
   { id: "purple", label: "סגול", c: "#9333ea" }, { id: "indigo", label: "אינדיגו", c: "#4f46e5" }, { id: "brown", label: "חום", c: "#92400e" },
   { id: "olive", label: "זית", c: "#4d7c0f" }, { id: "wine", label: "בורדו", c: "#9f1239" }, { id: "slate", label: "אפור", c: "#64748b" },
 ];
-let theme = { mode: "dark", accent: "none" };
+// Ready-made themes: background, category cards in a matching shade, and buttons in a contrasting color
+const PRESETS = [
+  { id: "ocean", label: "אוקיינוס", dark: true, v: { bg: "#0b1f3a", card: "#12305a", tile: "#1b4278", border: "#24508c", text: "#eaf2ff", muted: "#9fb6d8", primary: "#f59e0b", "primary-ink": "#1b1200", pos: "#4ade80", neg: "#fb7185", bal: "#fbbf24", "in-bar": "#34d399", "out-bar": "#fb7185" } },
+  { id: "royal", label: "כחול מלכותי", dark: true, v: { bg: "#111a4a", card: "#1b2766", tile: "#26358a", border: "#33449e", text: "#eef1ff", muted: "#aab4e6", primary: "#22d3ee", "primary-ink": "#04222a", pos: "#4ade80", neg: "#fda4af", bal: "#22d3ee", "in-bar": "#34d399", "out-bar": "#fda4af" } },
+  { id: "forest", label: "יער", dark: true, v: { bg: "#0d2419", card: "#143524", tile: "#1d4a33", border: "#27593f", text: "#ecf8f0", muted: "#9cc4ab", primary: "#f97316", "primary-ink": "#ffffff", pos: "#86efac", neg: "#fca5a5", bal: "#fdba74", "in-bar": "#4ade80", "out-bar": "#fb923c" } },
+  { id: "sunset", label: "שקיעה", dark: true, v: { bg: "#2a0f2e", card: "#3b1740", tile: "#522057", border: "#64296a", text: "#fdf0fb", muted: "#d6a9d3", primary: "#fbbf24", "primary-ink": "#2a1700", pos: "#6ee7b7", neg: "#fb7185", bal: "#fbbf24", "in-bar": "#34d399", "out-bar": "#fb7185" } },
+  { id: "coffee", label: "קפה", dark: true, v: { bg: "#24180f", card: "#33241a", tile: "#463224", border: "#58402e", text: "#f8efe6", muted: "#c9ae94", primary: "#e9b872", "primary-ink": "#2a1a08", pos: "#a3e635", neg: "#f87171", bal: "#e9b872", "in-bar": "#84cc16", "out-bar": "#f87171" } },
+  { id: "midnight", label: "חצות", dark: true, v: { bg: "#050505", card: "#121212", tile: "#1d1d1d", border: "#2a2a2a", text: "#f2f2f2", muted: "#9a9a9a", primary: "#a3e635", "primary-ink": "#132000", pos: "#4ade80", neg: "#f87171", bal: "#a3e635", "in-bar": "#4ade80", "out-bar": "#f87171" } },
+  { id: "sky", label: "שמיים", dark: false, v: { bg: "#dbeefe", card: "#f2f9ff", tile: "#c9e4fb", border: "#b3d4f1", text: "#0c2440", muted: "#4d6b8a", primary: "#f97316", "primary-ink": "#ffffff", pos: "#15803d", neg: "#c2410c", bal: "#2563eb", "in-bar": "#22a55a", "out-bar": "#f97316" } },
+  { id: "lavender", label: "לבנדר", dark: false, v: { bg: "#ece7fd", card: "#f8f6ff", tile: "#ddd4fb", border: "#cbbef3", text: "#24164a", muted: "#6b5c96", primary: "#7c3aed", "primary-ink": "#ffffff", pos: "#15803d", neg: "#be123c", bal: "#7c3aed", "in-bar": "#22a55a", "out-bar": "#e11d48" } },
+  { id: "mint", label: "מנטה", dark: false, v: { bg: "#d9f7e6", card: "#f2fdf6", tile: "#c3efd6", border: "#a8e0c1", text: "#0d2e1f", muted: "#4b7a62", primary: "#0f766e", "primary-ink": "#ffffff", pos: "#15803d", neg: "#c2410c", bal: "#0f766e", "in-bar": "#16a34a", "out-bar": "#ea580c" } },
+  { id: "peach", label: "אפרסק", dark: false, v: { bg: "#ffe8dc", card: "#fff7f2", tile: "#ffd8c4", border: "#f6c3a8", text: "#3b1d10", muted: "#8a5e4a", primary: "#0e7490", "primary-ink": "#ffffff", pos: "#15803d", neg: "#be123c", bal: "#0e7490", "in-bar": "#16a34a", "out-bar": "#e11d48" } },
+];
+const PRESET_KEYS = ["bg", "card", "tile", "border", "text", "muted", "primary", "primary-ink", "pos", "neg", "bal", "in-bar", "out-bar"];
+let theme = { mode: "dark", accent: "none", preset: null };
 try { theme = { ...theme, ...JSON.parse(localStorage.getItem("cashflow-theme") || "{}") }; } catch {}
 const darkMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 // Older choices: "night" was dark blue, "cream" was light amber, "slate" was gray
@@ -1279,12 +1293,26 @@ function normalizeTheme(t) {
   if (out.mode === "cream") { out.mode = "light"; if (!out.accent || out.accent === "none") out.accent = "amber"; }
   if (!THEME_MODES.some((m) => m.id === out.mode)) out.mode = "dark";
   if (!ACCENTS.some((a) => a.id === out.accent)) out.accent = "none";
+  if (out.preset && !PRESETS.some((p) => p.id === out.preset)) out.preset = null;
   return out;
 }
 theme = normalizeTheme(theme);
 
 function applyTheme() {
   const root = document.documentElement;
+  PRESET_KEYS.forEach((k) => root.style.removeProperty("--" + k));
+  delete root.dataset.preset;
+  const preset = PRESETS.find((p) => p.id === theme.preset);
+  if (preset) {
+    root.dataset.theme = preset.dark ? "dark" : "light";
+    root.dataset.preset = preset.id;
+    delete root.dataset.tint; root.style.removeProperty("--tint");
+    PRESET_KEYS.forEach((k) => root.style.setProperty("--" + k, preset.v[k]));
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = preset.v.card;
+    renderThemePicker();
+    return;
+  }
   const mode = theme.mode === "auto" ? (darkMq && darkMq.matches ? "dark" : "light") : theme.mode;
   root.dataset.theme = mode;
   const acc = ACCENTS.find((a) => a.id === theme.accent) || ACCENTS[0];
@@ -1297,12 +1325,17 @@ function applyTheme() {
 function renderThemePicker() {
   const modes = $("theme-modes"), accents = $("theme-accents");
   if (!modes) return;
-  modes.innerHTML = THEME_MODES.map((m) => `<button type="button" class="mode-btn ${theme.mode === m.id ? "on" : ""}" data-mode="${m.id}" aria-pressed="${theme.mode === m.id}">
+  $("theme-presets").innerHTML = PRESETS.map((p) => `<button type="button" class="preset-btn ${theme.preset === p.id ? "on" : ""}" data-preset="${p.id}" aria-pressed="${theme.preset === p.id}">
+      <span class="preset-sw" style="background:${p.v.bg};border-color:${p.v.border}">
+        <span class="preset-tile" style="background:${p.v.tile}"></span><span class="preset-tile" style="background:${p.v.tile}"></span>
+        <span class="preset-btnsw" style="background:${p.v.primary}"></span>
+      </span><span class="acc-label">${p.label}</span></button>`).join("");
+  modes.innerHTML = THEME_MODES.map((m) => `<button type="button" class="mode-btn ${!theme.preset && theme.mode === m.id ? "on" : ""}" data-mode="${m.id}" aria-pressed="${theme.mode === m.id}">
       <span class="mode-sw" style="background:${m.sw}"></span>${m.label}</button>`).join("");
   const dark = document.documentElement.dataset.theme === "dark";
   accents.innerHTML = ACCENTS.map((a) => {
     const bg = a.neutral ? (dark ? "#0f1218" : "#f5f6f8") : `color-mix(in srgb, ${a.c} ${dark ? 22 : 16}%, ${dark ? "#05070b" : "#ffffff"})`;
-    return `<button type="button" class="acc-btn ${theme.accent === a.id ? "on" : ""}" data-accent="${a.id}" style="--c:${a.c};--bgc:${bg}" aria-pressed="${theme.accent === a.id}">
+    return `<button type="button" class="acc-btn ${!theme.preset && theme.accent === a.id ? "on" : ""}" data-accent="${a.id}" style="--c:${a.c};--bgc:${bg}" aria-pressed="${theme.accent === a.id}">
       <span class="acc-sw"><span class="acc-dot"></span></span><span class="acc-label">${a.label}</span></button>`;
   }).join("");
 }
@@ -1319,8 +1352,9 @@ function wireTheme() {
   btn.onclick = (e) => { e.stopPropagation(); const open = pop.classList.toggle("hidden") === false; btn.setAttribute("aria-expanded", String(open)); };
   pop.onclick = (e) => {
     e.stopPropagation();
-    const m = e.target.closest("[data-mode]"); if (m) setTheme({ mode: m.dataset.mode });
-    const a = e.target.closest("[data-accent]"); if (a) setTheme({ accent: a.dataset.accent });
+    const pr = e.target.closest("[data-preset]"); if (pr) setTheme({ preset: pr.dataset.preset });
+    const m = e.target.closest("[data-mode]"); if (m) setTheme({ mode: m.dataset.mode, preset: null });
+    const a = e.target.closest("[data-accent]"); if (a) setTheme({ accent: a.dataset.accent, preset: null });
   };
   document.addEventListener("click", close);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });

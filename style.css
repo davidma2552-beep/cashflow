@@ -266,7 +266,7 @@ tr.future td { opacity: .6; }
 .grid.single { grid-template-columns: 1fr; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .75rem; }
 .tile {
-  border: 1px solid var(--border); border-radius: 12px; padding: .8rem .9rem; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 12px; padding: .8rem .9rem; background: var(--tile, var(--bg));
   display: flex; flex-direction: column; gap: .45rem; min-width: 0;
 }
 .tile.over {
@@ -512,8 +512,8 @@ body.sheet-open { overflow: hidden; }
 /* Compact category cards: tap to add an expense */
 .tile.compact { cursor: pointer; transition: border-color .15s; }
 .tile.compact:hover { border-color: var(--primary); }
-.tile-add { margin-top: auto; background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary); border: 0; font-weight: 600; }
-.tile-add:hover { background: color-mix(in srgb, var(--primary) 26%, transparent); }
+.tile-add { margin-top: auto; background: var(--primary); color: var(--primary-ink); border: 0; font-weight: 600; }
+.tile-add:hover { filter: brightness(1.08); }
 .stat-left .usage-bar { margin: .45rem 0 .35rem; }
 #usage-pct { font-size: .8rem; color: var(--muted); }
 
@@ -560,3 +560,23 @@ body.sheet-open { overflow: hidden; }
 .acc-dot { width: .8rem; height: .8rem; border-radius: 50%; background: var(--c); }
 .acc-label { font-size: .7rem; line-height: 1.1; }
 .theme-pop { width: 19rem; }
+
+/* Category cards get their own shade of the site color */
+:root[data-theme="dark"][data-tint] { --tile: color-mix(in srgb, var(--tint) 38%, #131826); }
+:root[data-theme="light"][data-tint] { --tile: color-mix(in srgb, var(--tint) 12%, #ffffff); }
+
+/* Ready-made themes in the color picker */
+.theme-presets { display: grid; grid-template-columns: repeat(5, 1fr); gap: .4rem; margin-bottom: .9rem; }
+.preset-btn {
+  font: inherit; color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: 10px;
+  padding: .3rem .15rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: .25rem;
+}
+.preset-btn.on { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 40%, transparent); }
+.preset-sw {
+  width: 2.7rem; height: 2rem; border-radius: 7px; border: 1px solid; position: relative;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 4px 4px 9px;
+}
+.preset-tile { border-radius: 3px; }
+.preset-btnsw { position: absolute; bottom: 3px; left: 25%; right: 25%; height: 4px; border-radius: 4px; }
+.theme-pop { max-height: min(78vh, 40rem); overflow-y: auto; width: 21rem; }
+@media (max-width: 520px) { .theme-presets { grid-template-columns: repeat(5, 1fr); } }
