@@ -1271,7 +1271,7 @@ const ACCENTS = [
 ];
 // Ready-made themes: background, category cards in a matching shade, and buttons in a contrasting color
 const PRESETS = [
-  { id: "ocean", label: "אוקיינוס", dark: true, v: { bg: "#0b1f3a", card: "#12305a", tile: "#1b4278", border: "#24508c", text: "#eaf2ff", muted: "#9fb6d8", primary: "#f59e0b", "primary-ink": "#1b1200", pos: "#4ade80", neg: "#fb7185", bal: "#fbbf24", "in-bar": "#34d399", "out-bar": "#fb7185" } },
+  { id: "ocean", label: "אוקיינוס", dark: true, v: { bg: "#0b1f3a", card: "#12305a", tile: "#1b4278", border: "#24508c", text: "#eaf2ff", muted: "#9fb6d8", primary: "#22c55e", "primary-ink": "#04230f", pos: "#4ade80", neg: "#fb7185", bal: "#4ade80", "in-bar": "#34d399", "out-bar": "#fb7185" } },
   { id: "royal", label: "כחול מלכותי", dark: true, v: { bg: "#111a4a", card: "#1b2766", tile: "#26358a", border: "#33449e", text: "#eef1ff", muted: "#aab4e6", primary: "#22d3ee", "primary-ink": "#04222a", pos: "#4ade80", neg: "#fda4af", bal: "#22d3ee", "in-bar": "#34d399", "out-bar": "#fda4af" } },
   { id: "forest", label: "יער", dark: true, v: { bg: "#0d2419", card: "#143524", tile: "#1d4a33", border: "#27593f", text: "#ecf8f0", muted: "#9cc4ab", primary: "#f97316", "primary-ink": "#ffffff", pos: "#86efac", neg: "#fca5a5", bal: "#fdba74", "in-bar": "#4ade80", "out-bar": "#fb923c" } },
   { id: "sunset", label: "שקיעה", dark: true, v: { bg: "#2a0f2e", card: "#3b1740", tile: "#522057", border: "#64296a", text: "#fdf0fb", muted: "#d6a9d3", primary: "#fbbf24", "primary-ink": "#2a1700", pos: "#6ee7b7", neg: "#fb7185", bal: "#fbbf24", "in-bar": "#34d399", "out-bar": "#fb7185" } },
