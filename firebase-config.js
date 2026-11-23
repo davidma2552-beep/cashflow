@@ -1,11 +1,10 @@
-// הדביקו כאן את הגדרות ה-Firebase של הפרויקט שלכם
-// (Firebase Console → Project settings → Your apps → Web app → SDK setup and configuration)
-// כל עוד apiKey נשאר "REPLACE_ME", האתר יעבוד במצב הדגמה מקומי (בלי חשבונות אמיתיים).
+// הגדרות החיבור לפרויקט ה-Firebase (cashflow-104cb).
+// הערכים האלה אינם סודיים ומיועדים להופיע באתר; מה שמגן על הנתונים הם כללי האבטחה ב-firestore.rules.
 export const firebaseConfig = {
-  apiKey: "REPLACE_ME",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:0000000000000000",
+  apiKey: "AIzaSyBUdXRWsv9X2srJPL-kY27puNLkfXHtT3U",
+  authDomain: "cashflow-104cb.firebaseapp.com",
+  projectId: "cashflow-104cb",
+  storageBucket: "cashflow-104cb.firebasestorage.app",
+  messagingSenderId: "939190868182",
+  appId: "1:939190868182:web:65cab450035df12d395177",
 };

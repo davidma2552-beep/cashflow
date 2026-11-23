@@ -74,3 +74,9 @@ python3 -m http.server 8000
 | `firebase.json` | הגדרות ל-Firebase Hosting |
 
 הנתונים נשמרים ב-Firestore תחת `users/{uid}/transactions`.
+
+---
+
+## מצב נוכחי
+- `firebase-config.js` מחובר לפרויקט `cashflow-104cb`.
+- `firebase-config.demo.js` משמש רק לתצוגה המקדימה ב-claude.ai, שנשארת במצב הדגמה.
