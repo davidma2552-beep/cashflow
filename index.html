@@ -149,6 +149,18 @@
     </main>
   </section>
 
+  <!-- הוספה מהירה (בטלפון) -->
+  <button id="qa-fab" class="qa-fab hidden" type="button" aria-label="הוספת הוצאה מהירה">+</button>
+  <div id="qa-sheet" class="qa-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="qa-title">
+    <form id="qa-form" class="qa-panel">
+      <div class="row between"><h3 id="qa-title">הוספה מהירה</h3><button type="button" id="qa-close" class="icon-btn" aria-label="סגירה">✕</button></div>
+      <input id="qa-amount" type="number" step="0.01" min="0.01" required inputmode="decimal" placeholder="סכום ₪" aria-label="סכום" />
+      <div id="qa-cats" class="qa-cats" role="group" aria-label="קטגוריה"></div>
+      <input id="qa-desc" maxlength="100" placeholder="תיאור (לא חובה)" aria-label="תיאור" />
+      <button type="submit" class="btn btn-primary">הוספה</button>
+    </form>
+  </div>
+
   <div id="toast" class="toast hidden" role="status"></div>
   <div id="loading" class="loading">טוען…</div>
 

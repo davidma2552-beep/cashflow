@@ -203,6 +203,58 @@ const KINDS = {
   fixed: { label: "הורדה חודשית", group: "🔁 הורדות חודשיות", cls: "neg" },
   expense: { label: "הוצאה אישית", group: "🛒 הוצאות אישיות", cls: "neg" },
 };
+// ----- Category icons: picked automatically from the name, or chosen by the user -----
+const ICON_RULES = [
+  ["🏠", ["שכירות", "שכר דירה", "דירה", "משכנתא", "ועד בית", "ארנונה"]],
+  ["🛒", ["סופר", "מכולת", "קניות", "שופרסל", "רמי לוי"]],
+  ["🍔", ["מזון", "אוכל", "מסעד", "משלוח", "וולט"]],
+  ["☕", ["קפה"]],
+  ["⛽", ["דלק"]],
+  ["🚗", ["רכב", "אוטו", "מכונית", "טסט", "חניה"]],
+  ["🚌", ["תחבורה", "אוטובוס", "רכבת", "מונית", "רב קו"]],
+  ["🎉", ["בילוי", "יציאות", "מסיבה", "הופעה"]],
+  ["📱", ["סלולר", "טלפון", "פלאפון"]],
+  ["🌐", ["אינטרנט", "ראוטר"]],
+  ["📺", ["טלוויזיה", "נטפליקס", "סטרימינג", "yes", "hot"]],
+  ["🎵", ["ספוטיפיי", "מוזיקה", "ציוד", "הפקה", "אולפן"]],
+  ["🔁", ["מנוי"]],
+  ["🛡️", ["ביטוח"]],
+  ["💡", ["חשמל", "חשבונות"]],
+  ["💧", ["מים"]],
+  ["🔥", ["גז"]],
+  ["🏦", ["הלוואה", "בנק", "עמלה", "ריבית"]],
+  ["💳", ["אשראי", "כרטיס"]],
+  ["💊", ["תרופ", "בריאות", "רופא", "קופת חולים"]],
+  ["🏋️", ["חדר כושר", "כושר", "ספורט"]],
+  ["👕", ["ביגוד", "בגדים", "נעליים", "קניות אונליין"]],
+  ["✂️", ["ספר", "תספורת", "מספרה", "קוסמטיקה"]],
+  ["🎓", ["לימוד", "קורס", "שכר לימוד", "אוניברסיטה"]],
+  ["🐶", ["כלב", "חתול", "חיות", "וטרינר"]],
+  ["✈️", ["טיסה", "חופשה", "חו״ל", "חול", "נסיעה"]],
+  ["🎁", ["מתנה", "מתנות"]],
+  ["👶", ["ילד", "גן", "תינוק"]],
+  ["🚬", ["סיגריות", "עישון"]],
+  ["💰", ["משכורת", "הכנסה", "חיסכון", "חסכון"]],
+  ["⚡", ["לא צפוי"]],
+  ["📦", ["אחר", "שונות", "כללי"]],
+];
+const ICON_CHOICES = ["🛒", "🏠", "🚗", "⛽", "🍔", "☕", "🎉", "📱", "🌐", "📺", "🎵", "🛡️", "💡", "💧", "🏦", "💳", "💊", "🏋️", "👕", "✂️", "🎓", "🐶", "✈️", "🎁", "👶", "🚌", "🔁", "💰", "📦"];
+function autoIcon(name) {
+  const n = String(name || "").toLowerCase();
+  for (const [icon, words] of ICON_RULES) if (words.some((w) => n.includes(w.toLowerCase()))) return icon;
+  return "🏷️";
+}
+const catIcon = (c) => (c && c.icon) || autoIcon(c && c.name);
+// Icon for a transaction's category name (the category may have been deleted)
+const iconForName = (name) => catIcon(getCategories().find((c) => c.name === name) || { name });
+function iconPicker(c) {
+  const cur = c.icon || "";
+  const auto = autoIcon(c.name);
+  return `<fieldset class="icon-pick"><legend>אייקון</legend>
+    <label title="אוטומטי לפי השם"><input type="radio" name="icon" value="" ${cur ? "" : "checked"} /><span>${auto}<small>אוטו׳</small></span></label>
+    ${ICON_CHOICES.map((i) => `<label><input type="radio" name="icon" value="${i}" ${cur === i ? "checked" : ""} /><span>${i}</span></label>`).join("")}
+  </fieldset>`;
+}
 const kindOf = (c) => (KINDS[c.kind] ? c.kind : "expense");
 const isFixed = (c) => c.kind === "fixed";
 const hasFixedAmount = (c) => c.kind === "income" || c.kind === "fixed";
@@ -246,6 +298,7 @@ function drawerHTML(key) {
       return `<form class="d-edit" data-dform="${id}">
         <input name="name" maxlength="40" required value="${esc(c.name)}" aria-label="שם ההורדה" />
         <input name="amount" type="number" min="0" step="0.01" inputmode="decimal" value="${amt || ""}" placeholder="סכום ₪" aria-label="סכום חודשי" />
+        ${iconPicker(c)}
         <div class="d-edit-actions">
           <button type="submit" class="btn btn-primary btn-sm">שמירה</button>
           <button type="button" class="btn btn-ghost btn-sm" data-dcancel>ביטול</button>
@@ -257,7 +310,7 @@ function drawerHTML(key) {
     return `<div class="d-row ${ok ? "done" : ""}">
       <label class="d-check">
         <input type="checkbox" data-paid="${id}" ${ok ? "checked" : ""} aria-label="${esc(c.name)} ירד" />
-        <span class="d-name">${esc(c.name)}${ok ? ` <span class="d-ok">✓ ירד</span>` : ""}</span>
+        <span class="d-name"><span class="cat-ico" aria-hidden="true">${catIcon(c)}</span>${esc(c.name)}${ok ? ` <span class="d-ok">✓ ירד</span>` : ""}</span>
       </label>
       <span class="d-amt">${amt > 0 ? fmt(amt) : `<span class="muted">ללא סכום</span>`}</span>
       <button type="button" class="icon-btn d-edit-btn" data-dedit="${id}" title="עריכה או מחיקה" aria-label="עריכת ${esc(c.name)}">✎</button>
@@ -423,6 +476,7 @@ const saveCategories = (cats) =>
       const kind = kindOf(c);
       const out = { id: c.id, name: c.name, kind, budget: kind === "expense" ? Number(c.budget) || 0 : 0, amounts: kind === "expense" ? [] : (c.amounts || []) };
       if (c.deletedFrom) out.deletedFrom = c.deletedFrom;
+      if (c.icon) out.icon = c.icon;
       return out;
     }),
   });
@@ -497,7 +551,7 @@ function render() {
       <td class="c-date">${dateCell(ymd(start))}</td>
       <td class="time"><span class="muted">—</span></td>
       <td class="desc"><span class="muted">הכנסה חודשית</span></td>
-      <td class="c-cat"><span class="tag">${esc(c.name)}</span></td>
+      <td class="c-cat"><span class="tag">${catIcon(c)} ${esc(c.name)}</span></td>
       <td class="num c-amt pos">+${fmt(amount)}</td>
       <td class="num c-bal">${fmt(bal)}</td>
       <td class="row-actions"></td>
@@ -512,7 +566,7 @@ function render() {
       <td class="c-date">${dateCell(ymd(start))}</td>
       <td class="time"><span class="muted">—</span></td>
       <td class="desc">${paidNow ? `<span class="muted">הורדה חודשית</span> <span class="d-ok">✓ ירד</span>` : `<span class="muted">הורדה חודשית · ממתין</span>`}</td>
-      <td class="c-cat"><span class="tag">${esc(c.name)}</span></td>
+      <td class="c-cat"><span class="tag">${catIcon(c)} ${esc(c.name)}</span></td>
       <td class="num c-amt neg">−${fmt(amount)}</td>
       <td class="num c-bal ${bal < 0 ? "neg" : ""}">${paidNow ? fmt(bal) : `<span class="muted">—</span>`}</td>
       <td class="row-actions"></td>
@@ -546,7 +600,7 @@ function render() {
       <td class="c-date">${dateCell(t.date)}</td>
       <td class="time">${txTime(t) || `<span class="muted">—</span>`}</td>
       <td class="desc">${t.description ? esc(t.description) : `<span class="muted">—</span>`}</td>
-      <td class="c-cat"><span class="tag">${esc(t.category)}</span></td>
+      <td class="c-cat"><span class="tag">${iconForName(t.category)} ${esc(t.category)}</span></td>
       <td class="num c-amt ${t.type === "income" ? "pos" : "neg"}">${t.type === "income" ? "+" : "−"}${fmt(Number(t.amount))}</td>
       <td class="num c-bal ${bal < 0 ? "neg" : ""}">${fmt(bal)}</td>
       <td class="row-actions"><button class="icon-btn edit-tx" data-txedit="${esc(t.id)}" title="עריכה" aria-label="עריכת התנועה">✎</button><button class="icon-btn" data-del="${esc(t.id)}" title="מחיקה" aria-label="מחיקה">✕</button></td>
@@ -587,6 +641,7 @@ function renderCategories(periodTx, key) {
       return `<div class="tile editing">
         <form class="tile-edit" data-editform="${id}">
           <label>שם<input name="name" maxlength="40" required value="${esc(c.name)}" /></label>
+          ${iconPicker(c)}
           ${kindField}
           ${amountField(kind !== "expense")}
           ${income ? "" : budgetField(kind === "expense")}
@@ -599,7 +654,7 @@ function renderCategories(periodTx, key) {
       </div>`;
     }
 
-    const head = `<div class="tile-head"><strong>${esc(c.name)}</strong><button class="icon-btn" data-edit="${id}" title="עריכה" aria-label="עריכת ${esc(c.name)}">✎</button></div>`;
+    const head = `<div class="tile-head"><strong><span class="cat-ico" aria-hidden="true">${catIcon(c)}</span>${esc(c.name)}</strong><button class="icon-btn" data-edit="${id}" title="עריכה" aria-label="עריכת ${esc(c.name)}">✎</button></div>`;
     const verb = income ? "הכנסה" : "הוצאה";
     const descPh = income ? "תיאור (למשל בונוס)" : kind === "fixed" ? "תיאור (למשל חיוב נוסף)" : "תיאור ההוצאה";
     const form = `<form class="quick" data-quick="${id}">
@@ -661,6 +716,26 @@ function renderCategories(periodTx, key) {
 // otherwise the first day of the viewed period.
 function quickDate() {
   return periodOf(todayStr()) === viewKey() ? todayStr() : ymd(periodStart(viewY, viewM));
+}
+
+// ----- Quick add (floating + button): amount, category, optional description -----
+let quickCat = null;
+function quickChoices() {
+  const cats = getCategories().filter((c) => kindOf(c) === "expense" && activeIn(c, viewKey()));
+  return [...cats.map((c) => ({ name: c.name, icon: catIcon(c), type: "expense" })),
+    { name: UNPLANNED, icon: "⚡", type: "expense" }, { name: "הכנסה", icon: "💰", type: "income" }];
+}
+function renderQuickCats() {
+  const list = quickChoices();
+  if (!list.some((x) => x.name === quickCat)) quickCat = list[0].name;
+  $("qa-cats").innerHTML = list.map((x) => `<button type="button" class="qa-chip ${x.name === quickCat ? "on" : ""} ${x.type === "income" ? "inc" : ""}" data-qcat="${esc(x.name)}" aria-pressed="${x.name === quickCat}">
+    <span aria-hidden="true">${x.icon}</span>${esc(x.name)}</button>`).join("");
+}
+function openQuick(open) {
+  $("qa-sheet").classList.toggle("hidden", !open);
+  $("qa-fab").classList.toggle("hidden", open);
+  document.body.classList.toggle("sheet-open", open);
+  if (open) { $("qa-form").reset(); renderQuickCats(); setTimeout(() => $("qa-amount").focus(), 50); }
 }
 
 let toastTimer;
@@ -743,6 +818,8 @@ function showView(signedIn) {
   $("loading").classList.add("hidden");
   $("auth-view").classList.toggle("hidden", signedIn);
   $("app-view").classList.toggle("hidden", !signedIn);
+  $("qa-fab").classList.toggle("hidden", !signedIn);
+  if (!signedIn) { $("qa-sheet").classList.add("hidden"); document.body.classList.remove("sheet-open"); }
 }
 
 function onUser(u) {
@@ -800,6 +877,30 @@ function wireEvents() {
       goToCurrentPeriod(); render();
       toast(`מעכשיו הכספים מתאפסים ב-${day} בכל חודש`);
     } catch (ex) { toast(ex.message, true); }
+  };
+
+  $("qa-fab").onclick = () => openQuick(true);
+  $("qa-close").onclick = () => openQuick(false);
+  $("qa-sheet").onclick = (e) => { if (e.target.id === "qa-sheet") openQuick(false); };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("qa-sheet").classList.contains("hidden")) openQuick(false); });
+  $("qa-cats").onclick = (e) => {
+    const b = e.target.closest("[data-qcat]");
+    if (!b) return;
+    quickCat = b.dataset.qcat; renderQuickCats();
+  };
+  $("qa-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const amount = Math.round(parseFloat($("qa-amount").value) * 100) / 100;
+    const choice = quickChoices().find((x) => x.name === quickCat);
+    if (!(amount > 0) || !choice) return;
+    const btn = $("qa-form").querySelector("button[type=submit]");
+    btn.disabled = true;
+    try {
+      await backend.addTransactions(user.uid, [{ type: choice.type, amount, description: $("qa-desc").value.trim(), category: choice.name, date: quickDate(), time: nowTime() }]);
+      openQuick(false);
+      toast(`נוספה ${choice.type === "income" ? "הכנסה" : "הוצאה"} של ${fmt(amount)} · ${choice.name}`);
+    } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); }
+    btn.disabled = false;
   };
 
   $("tx-body").onclick = (e) => {
@@ -933,7 +1034,7 @@ function wireEvents() {
       if (nameTaken(name, id, "fixed")) { toast("כבר יש הורדה בשם הזה", true); return; }
       const old = getCategories().find((c) => c.id === id);
       try {
-        await saveCategories(getCategories().map((c) => (c.id === id ? { ...c, name, amounts: setFixedAmount(c, amount) } : c)));
+        await saveCategories(getCategories().map((c) => (c.id === id ? { ...c, name, icon: df.icon ? df.icon.value : c.icon, amounts: setFixedAmount(c, amount) } : c)));
         editingDeduct = null; render();
         toast("נשמר");
       } catch (ex) { toast(ex.message, true); }
@@ -1026,6 +1127,7 @@ function wireEvents() {
       const old = cats.find((c) => c.id === id);
       const update = (c) => {
         const kind = f.kind ? f.kind.value : kindOf(c);
+        c = { ...c, icon: f.icon ? f.icon.value : c.icon };
         const amount = f.fixed ? Math.max(0, parseFloat(f.fixed.value) || 0) : 0;
         if (kind === "fixed") return { ...c, name, kind, amounts: setFixedAmount(c, amount) };
         if (kind === "income") return { ...c, name, kind, amounts: withAmountFrom(c, viewKey(), amount) };
