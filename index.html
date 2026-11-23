@@ -65,10 +65,11 @@
       <div class="stats">
         <div class="stat" id="stat-income"></div>
         <div class="stat" id="stat-deduct"></div>
-        <div class="stat stat-left"><div class="stat-label">נשאר החודש</div><div id="s-close" class="stat-value"></div><div id="s-close-note" class="stat-note"></div></div>
-        <div class="stat usage">
-          <div class="row between"><span id="usage-text"></span><span id="usage-pct" class="muted"></span></div>
+        <div class="stat stat-left">
+          <div class="stat-label row between"><span>נשאר החודש</span><span id="usage-pct"></span></div>
+          <div id="s-close" class="stat-value"></div>
           <div class="cat-bar usage-bar"><div id="usage-bar"></div></div>
+          <div id="s-close-note" class="stat-note"></div>
         </div>
       </div>
 
@@ -77,7 +78,7 @@
           <h3>קטגוריות ותקציב חודשי</h3>
           <div id="budget-total" class="muted"></div>
         </div>
-        <p class="muted small">כאן מנהלים את <b>ההוצאות האישיות</b> (מזון, בילויים וכו׳): מזינים הוצאה מתוך הכרטיס, עם תיאור וסכום, ואפשר לקבוע תקציב חודשי. את ההכנסה מזינים בתיבה "הכנסות החודש" למעלה, וההורדות הקבועות (שכירות, סלולר, ביטוח) נמצאות ברשימה שבתיבה "הורדות חודשיות קבועות". כל הקטגוריות עוברות לחודש הבא, ורק מה שהוזן מתאפס.</p>
+        <p class="muted small">הוצאות שמשתנות מחודש לחודש. לחצו על כרטיס כדי להוסיף הוצאה, ועל ✎ כדי לשנות שם, אייקון או תקציב.</p>
         <div id="cat-tiles"></div>
         <div class="adders">
           <form id="cat-form" class="adder">

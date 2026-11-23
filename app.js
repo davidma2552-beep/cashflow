@@ -527,15 +527,16 @@ function render() {
   $("s-close").className = "stat-value " + (left < 0 ? "neg" : "");
   // Show the calculation: income minus what has actually gone out (ticked deductions + expenses)
   const pendingDeduct = Math.max(0, deduct - tot.auto.paidDeduct);
-  $("s-close-note").innerHTML = `${fmt(income)} הכנסות − ${fmt(expense)} שירדו בפועל`
-    + (pendingDeduct > 0 ? `<br>אחרי שיירדו עוד ${fmt(pendingDeduct)} בהורדות: <b>${fmt(left - pendingDeduct)}</b>` : "");
+  const hasData = income > 0 || expense > 0;
+  $("s-close-note").innerHTML = hasData
+    ? `${fmt(income)} הכנסות − ${fmt(expense)} שירדו בפועל`
+      + (pendingDeduct > 0 ? `<br>אחרי שיירדו עוד ${fmt(pendingDeduct)} בהורדות: <b>${fmt(left - pendingDeduct)}</b>` : "")
+    : `עוד אין הכנסות בחודש הזה. לחצו על "הכנסות החודש" כדי להזין את ההכנסה החודשית.`;
 
-  // How much of this period's income was spent
+  // How much of this period's income was spent: a bar inside the "left this month" card
   const pct = income > 0 ? (expense / income) * 100 : expense > 0 ? 100 : 0;
-  $("usage-text").innerHTML = income > 0 || expense > 0
-    ? `הוצאתם <b>${fmt(expense)}</b> מתוך <b>${fmt(income)}</b> שהכנסתם`
-    : `<span class="muted">עוד אין הכנסות בחודש הזה. לחצו על "הכנסות החודש" למעלה כדי להזין את ההכנסה החודשית.</span>`;
-  $("usage-pct").textContent = income > 0 ? `${Math.round(pct)}%` : "";
+  $("usage-pct").innerHTML = income > 0 ? `הוצאתם <bdi dir="ltr">${Math.round(pct)}%</bdi> מההכנסה` : "";
+  $("usage-bar").parentElement.classList.toggle("hidden", !hasData);
   $("usage-bar").style.width = Math.min(100, pct) + "%";
   $("usage-bar").className = expense > income ? "over" : pct >= 85 ? "warn" : "";
 
@@ -654,6 +655,7 @@ function renderCategories(periodTx, key) {
       </div>`;
     }
 
+    const addBtn = `<button type="button" class="btn btn-sm tile-add" data-qadd="${esc(c.name)}" aria-label="הוספת הוצאה ב${esc(c.name)}">+ הוצאה</button>`;
     const head = `<div class="tile-head"><strong><span class="cat-ico" aria-hidden="true">${catIcon(c)}</span>${esc(c.name)}</strong><button class="icon-btn" data-edit="${id}" title="עריכה" aria-label="עריכת ${esc(c.name)}">✎</button></div>`;
     const verb = income ? "הכנסה" : "הוצאה";
     const descPh = income ? "תיאור (למשל בונוס)" : kind === "fixed" ? "תיאור (למשל חיוב נוסף)" : "תיאור ההוצאה";
@@ -687,10 +689,10 @@ function renderCategories(periodTx, key) {
     const status = budget > 0
       ? (remaining >= 0 ? `<span>נשאר <b>${fmt(remaining)}</b></span>` : `<span class="neg">⚠️ עברתם את התקציב</span>`)
       : `<span class="muted">ללא תקציב</span>`;
-    return `<div class="tile ${level}">${head}
+    return `<div class="tile compact ${level}" data-qadd="${esc(c.name)}">${head}
       <div class="tile-nums"><span class="num-big">${fmt(spent)}</span>${budget > 0 ? `<span class="muted">מתוך ${fmt(budget)}</span>` : ""}${level === "over" ? `<span class="over-badge">חרגתם ב-${fmt(-remaining)}</span>` : ""}</div>
       ${budget > 0 ? `<div class="cat-bar"><div class="${level}" style="width:${pct}%"></div></div>` : ""}
-      <div class="tile-status">${status}</div>${form}</div>`;
+      <div class="tile-status">${status}</div>${addBtn}</div>`;
   };
 
   // One section per kind, each with its own subtotal
@@ -731,11 +733,11 @@ function renderQuickCats() {
   $("qa-cats").innerHTML = list.map((x) => `<button type="button" class="qa-chip ${x.name === quickCat ? "on" : ""} ${x.type === "income" ? "inc" : ""}" data-qcat="${esc(x.name)}" aria-pressed="${x.name === quickCat}">
     <span aria-hidden="true">${x.icon}</span>${esc(x.name)}</button>`).join("");
 }
-function openQuick(open) {
+function openQuick(open, cat) {
   $("qa-sheet").classList.toggle("hidden", !open);
   $("qa-fab").classList.toggle("hidden", open);
   document.body.classList.toggle("sheet-open", open);
-  if (open) { $("qa-form").reset(); renderQuickCats(); setTimeout(() => $("qa-amount").focus(), 50); }
+  if (open) { $("qa-form").reset(); if (cat) quickCat = cat; renderQuickCats(); setTimeout(() => $("qa-amount").focus(), 50); }
 }
 
 let toastTimer;
@@ -1158,6 +1160,9 @@ function wireEvents() {
     const edit = e.target.closest("[data-edit]");
     if (edit) { editingCat = edit.dataset.edit; render(); $("cat-tiles").querySelector(".tile-edit input")?.focus(); return; }
     if (e.target.closest("[data-cancel]")) { editingCat = null; render(); return; }
+    // Tapping a category card (or its + button) opens quick add with that category picked
+    const qadd = e.target.closest("[data-qadd]");
+    if (qadd && !e.target.closest(".tile-edit")) { openQuick(true, qadd.dataset.qadd); return; }
     const del = e.target.closest("[data-delcat]");
     if (del) {
       confirmClick(del, "בטוח?", async () => {

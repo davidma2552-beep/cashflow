@@ -395,3 +395,11 @@ body.sheet-open { overflow: hidden; }
 .tile.editing { grid-column: 1 / -1; }
 
 .chart-empty { padding: 2.5rem 1rem; margin: 0; }
+
+/* Compact category cards: tap to add an expense */
+.tile.compact { cursor: pointer; transition: border-color .15s; }
+.tile.compact:hover { border-color: var(--primary); }
+.tile-add { margin-top: auto; background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary); border: 0; font-weight: 600; }
+.tile-add:hover { background: color-mix(in srgb, var(--primary) 26%, transparent); }
+.stat-left .usage-bar { margin: .45rem 0 .35rem; }
+#usage-pct { font-size: .8rem; color: var(--muted); }
