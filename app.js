@@ -26,10 +26,10 @@ async function createFirebaseBackend() {
     reset: (e) => A.sendPasswordResetEmail(auth, e),
     signOut: () => A.signOut(auth),
     watchTransactions(uid, cb) {
-      return F.onSnapshot(txCol(uid), (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+      return F.onSnapshot(txCol(uid), (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })), !snap.metadata.fromCache));
     },
     watchSettings(uid, cb) {
-      return F.onSnapshot(userDoc(uid), (d) => cb(d.exists() ? d.data() : {}));
+      return F.onSnapshot(userDoc(uid), (d) => cb(d.exists() ? d.data() : {}, !d.metadata.fromCache));
     },
     async addTransactions(uid, list) {
       const batch = F.writeBatch(db);
@@ -81,12 +81,12 @@ function createDemoBackend() {
     signOut: async () => setUser(null),
     watchTransactions(uid, cb) {
       listeners.tx = [cb];
-      setTimeout(() => cb([...userData(uid).tx]));
+      setTimeout(() => cb([...userData(uid).tx], true));
       return () => { listeners.tx = []; };
     },
     watchSettings(uid, cb) {
       listeners.settings = [cb];
-      setTimeout(() => cb({ ...userData(uid).settings }));
+      setTimeout(() => cb({ ...userData(uid).settings }, true));
       return () => { listeners.settings = []; };
     },
     async addTransactions(uid, list) {
@@ -122,20 +122,6 @@ const compact = new Intl.NumberFormat("he-IL", { notation: "compact", maximumFra
 const fmt = (n) => money.format(n);
 const moneyShort = new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fmtShort = (n) => moneyShort.format(n);
-// An icon for each category, guessed from its name
-const CAT_ICONS = [
-  [/סופר|מכולת|קניות|שופרסל|רמי לוי/, "🛒"], [/אוכל|מזון|מסעד|וולט|ארוח|קפה/, "🍔"], [/רכב|דלק|חניה|מוסך|טסט/, "🚗"],
-  [/שכיר|דירה|משכנתא|ארנונה|בית/, "🏠"], [/חשמל|מים|גז|חשבונ/, "💡"], [/סלולר|טלפון|אינטרנט|פלאפון/, "📱"],
-  [/ביטוח/, "🛡️"], [/הלווא|בנק|עמל/, "🏦"], [/מנוי|נטפליקס|ספוטיפיי|סטרימינג/, "📺"], [/בילוי|יציא|דייט|בר|מסיב/, "🍹"],
-  [/מתנ|חריג/, "🎁"], [/תספורת|מספר|יופי|קוסמטיק/, "💈"], [/בריאות|רופא|תרופ|קופת/, "💊"], [/ביגוד|בגד|נעל/, "👕"],
-  [/חינוך|לימוד|קורס|ספר/, "📚"], [/ספורט|חדר כושר|כושר/, "🏋️"], [/חיסכון|השקע/, "🐷"], [/תחבור|אוטובוס|רכבת|מונית/, "🚌"],
-  [/טיול|חופש|נסיע|טיס/, "✈️"], [/ילד|גן|בייביסיטר/, "🧸"], [/חיות|כלב|חתול|וטרינר/, "🐾"], [/לא צפוי/, "⚡"],
-  [/משכורת|שכר|הכנס|בונוס/, "💰"], [/אחר/, "📦"],
-];
-function catIcon(name, type) {
-  const hit = CAT_ICONS.find(([re]) => re.test(name || ""));
-  return hit ? hit[1] : type === "income" ? "💰" : "🏷️";
-}
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -219,6 +205,58 @@ const KINDS = {
   fixed: { label: "הורדה חודשית", group: "🔁 הורדות חודשיות", cls: "neg" },
   expense: { label: "הוצאה אישית", group: "🛒 הוצאות אישיות", cls: "neg" },
 };
+// ----- Category icons: picked automatically from the name, or chosen by the user -----
+const ICON_RULES = [
+  ["🏠", ["שכירות", "שכר דירה", "דירה", "משכנתא", "ועד בית", "ארנונה"]],
+  ["🛒", ["סופר", "מכולת", "קניות", "שופרסל", "רמי לוי"]],
+  ["🍔", ["מזון", "אוכל", "מסעד", "משלוח", "וולט"]],
+  ["☕", ["קפה"]],
+  ["⛽", ["דלק"]],
+  ["🚗", ["רכב", "אוטו", "מכונית", "טסט", "חניה"]],
+  ["🚌", ["תחבורה", "אוטובוס", "רכבת", "מונית", "רב קו"]],
+  ["🎉", ["בילוי", "יציאות", "מסיבה", "הופעה"]],
+  ["📱", ["סלולר", "טלפון", "פלאפון"]],
+  ["🌐", ["אינטרנט", "ראוטר"]],
+  ["📺", ["טלוויזיה", "נטפליקס", "סטרימינג", "yes", "hot"]],
+  ["🎵", ["ספוטיפיי", "מוזיקה", "ציוד", "הפקה", "אולפן"]],
+  ["🔁", ["מנוי"]],
+  ["🛡️", ["ביטוח"]],
+  ["💡", ["חשמל", "חשבונות"]],
+  ["💧", ["מים"]],
+  ["🔥", ["גז"]],
+  ["🏦", ["הלוואה", "בנק", "עמלה", "ריבית"]],
+  ["💳", ["אשראי", "כרטיס"]],
+  ["💊", ["תרופ", "בריאות", "רופא", "קופת חולים"]],
+  ["🏋️", ["חדר כושר", "כושר", "ספורט"]],
+  ["👕", ["ביגוד", "בגדים", "נעליים", "קניות אונליין"]],
+  ["✂️", ["ספר", "תספורת", "מספרה", "קוסמטיקה"]],
+  ["🎓", ["לימוד", "קורס", "שכר לימוד", "אוניברסיטה"]],
+  ["🐶", ["כלב", "חתול", "חיות", "וטרינר"]],
+  ["✈️", ["טיסה", "חופשה", "חו״ל", "חול", "נסיעה"]],
+  ["🎁", ["מתנה", "מתנות"]],
+  ["👶", ["ילד", "גן", "תינוק"]],
+  ["🚬", ["סיגריות", "עישון"]],
+  ["💰", ["משכורת", "הכנסה", "חיסכון", "חסכון"]],
+  ["⚡", ["לא צפוי"]],
+  ["📦", ["אחר", "שונות", "כללי"]],
+];
+const ICON_CHOICES = ["🛒", "🏠", "🚗", "⛽", "🍔", "☕", "🎉", "📱", "🌐", "📺", "🎵", "🛡️", "💡", "💧", "🏦", "💳", "💊", "🏋️", "👕", "✂️", "🎓", "🐶", "✈️", "🎁", "👶", "🚌", "🔁", "💰", "📦"];
+function autoIcon(name) {
+  const n = String(name || "").toLowerCase();
+  for (const [icon, words] of ICON_RULES) if (words.some((w) => n.includes(w.toLowerCase()))) return icon;
+  return "🏷️";
+}
+const catIcon = (c) => (c && c.icon) || autoIcon(c && c.name);
+// Icon for a transaction's category name (the category may have been deleted)
+const iconForName = (name) => catIcon(getCategories().find((c) => c.name === name) || { name });
+function iconPicker(c) {
+  const cur = c.icon || "";
+  const auto = autoIcon(c.name);
+  return `<fieldset class="icon-pick"><legend>אייקון</legend>
+    <label title="אוטומטי לפי השם"><input type="radio" name="icon" value="" ${cur ? "" : "checked"} /><span>${auto}<small>אוטו׳</small></span></label>
+    ${ICON_CHOICES.map((i) => `<label><input type="radio" name="icon" value="${i}" ${cur === i ? "checked" : ""} /><span>${i}</span></label>`).join("")}
+  </fieldset>`;
+}
 const kindOf = (c) => (KINDS[c.kind] ? c.kind : "expense");
 const isFixed = (c) => c.kind === "fixed";
 const hasFixedAmount = (c) => c.kind === "income" || c.kind === "fixed";
@@ -262,6 +300,7 @@ function drawerHTML(key) {
       return `<form class="d-edit" data-dform="${id}">
         <input name="name" maxlength="40" required value="${esc(c.name)}" aria-label="שם ההורדה" />
         <input name="amount" type="number" min="0" step="0.01" inputmode="decimal" value="${amt || ""}" placeholder="סכום ₪" aria-label="סכום חודשי" />
+        ${iconPicker(c)}
         <div class="d-edit-actions">
           <button type="submit" class="btn btn-primary btn-sm">שמירה</button>
           <button type="button" class="btn btn-ghost btn-sm" data-dcancel>ביטול</button>
@@ -273,7 +312,7 @@ function drawerHTML(key) {
     return `<div class="d-row ${ok ? "done" : ""}">
       <label class="d-check">
         <input type="checkbox" data-paid="${id}" ${ok ? "checked" : ""} aria-label="${esc(c.name)} ירד" />
-        <span class="d-name">${esc(c.name)}${ok ? ` <span class="d-ok">✓ ירד</span>` : ""}</span>
+        <span class="d-name"><span class="cat-ico" aria-hidden="true">${catIcon(c)}</span>${esc(c.name)}${ok ? ` <span class="d-ok">✓ ירד</span>` : ""}</span>
       </label>
       <span class="d-amt">${amt > 0 ? fmt(amt) : `<span class="muted">ללא סכום</span>`}</span>
       <button type="button" class="icon-btn d-edit-btn" data-dedit="${id}" title="עריכה או מחיקה" aria-label="עריכת ${esc(c.name)}">✎</button>
@@ -344,7 +383,10 @@ function getCategories() {
   return DEFAULT_CATS.map((c) => ({ id: "default-" + c.name, budget: 0, amounts: [], ...c }));
 }
 // A deleted category stays visible in the periods before it was deleted, so past months don't change.
-const activeIn = (c, key) => !c.deletedFrom || effectiveDate(key) < asDate(c.deletedFrom);
+// A fixed deduction counts only from the period it was added in, so months before it don't show it.
+const fixedStart = (c) => (c.amounts || []).map((h) => asDate(h.from)).sort()[0];
+const activeIn = (c, key) => (!c.deletedFrom || effectiveDate(key) < asDate(c.deletedFrom))
+  && !(c.kind === "fixed" && fixedStart(c) && fixedStart(c) > ymd(rangeOfKey(key)[1]));
 const liveCategories = () => getCategories().filter((c) => !c.deletedFrom);
 
 // Fixed monthly income: a history of {from: date, amount}. Each period uses the latest change made on or before its last day.
@@ -374,12 +416,69 @@ function withAmountFrom(c, key, amount) {
   return [...(c.amounts || []).filter((h) => asDate(h.from) !== from), { from, amount }];
 }
 
+// ----- Bringing existing users up to the current defaults -----
+// Users who saved their categories before the defaults changed still hold the old default list.
+// Once per user: drop old defaults they never touched (not renamed, no amount or budget, no transactions,
+// never ticked), and add the new defaults they don't have. Anything the user added or edited stays as it is.
+const DEFAULTS_VERSION = 2;
+// Every default category ever shipped, with the kinds it shipped as
+const OLD_DEFAULTS = { "משכורת": ["income"], "שכירות": ["expense", "fixed"], "חשבונות": ["expense", "fixed"], "מזון": ["expense"], "רכב": ["expense"], "בילויים": ["expense"], "אחר": ["expense"] };
+const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+function untouchedOldDefault(c) {
+  const kinds = OLD_DEFAULTS[c.name];
+  if (!kinds || c.id !== "default-" + c.name || c.deletedFrom) return false;
+  if (!kinds.includes(c.kind || "expense")) return false;
+  if (Number(c.budget) > 0 || (c.amounts || []).some((h) => Number(h.amount) > 0)) return false;
+  if (txs.some((t) => t.category === c.name)) return false;
+  if (Object.values(settings.paid || {}).some((m) => m && m[c.id])) return false;
+  return true;
+}
+function migratedCategories(cats) {
+  const out = [];
+  const replaced = new Set();
+  for (const c of cats) {
+    if (!untouchedOldDefault(c)) { out.push(c); continue; }
+    const isNewDefault = DEFAULT_CATS.some((d) => d.name === c.name);
+    if (isNewDefault && kindOf(c) === "expense") out.push(c); // already matches the new defaults
+    else if (isNewDefault) { replaced.add(c.name); out.push({ id: "default2-" + c.name, name: c.name, kind: "expense", budget: 0, amounts: [] }); }
+    // otherwise an unused old default: dropped
+  }
+  // New defaults that were never part of the old list (סופר): add unless the user already has one by that name
+  const added = DEFAULT_CATS.filter((d) => !OLD_DEFAULTS[d.name] && !out.some((c) => !c.deletedFrom && sameName(c.name, d.name)))
+    .map((d) => ({ id: "default2-" + d.name, name: d.name, kind: "expense", budget: 0, amounts: [] }));
+  if (added.length) {
+    // Place it in the new defaults' order: after the last live personal-expense category that comes before it there
+    for (const a of added) {
+      const before = DEFAULT_CATS.slice(0, DEFAULT_CATS.findIndex((d) => d.name === a.name)).map((d) => d.name);
+      let at = -1;
+      out.forEach((c, i) => { if (!c.deletedFrom && kindOf(c) === "expense" && before.includes(c.name)) at = i; });
+      if (at < 0) at = out.findIndex((c) => !c.deletedFrom && kindOf(c) === "expense") - 1;
+      out.splice(at < 0 ? out.length : at + 1, 0, a);
+    }
+  }
+  return out;
+}
+let migrating = false;
+async function migrateDefaults(ready) {
+  if (!user || migrating || !ready.tx || !ready.settings) return;
+  if ((Number(settings.defaultsVersion) || 0) >= DEFAULTS_VERSION) return;
+  migrating = true;
+  const uid = user.uid;
+  try {
+    // Users who never saved categories already see the current defaults
+    if (Array.isArray(settings.categories)) await saveCategories(migratedCategories(settings.categories));
+    if (user && user.uid === uid) await backend.saveSettings(uid, { defaultsVersion: DEFAULTS_VERSION });
+  } catch (e) { console.warn("defaults update skipped", e); }
+  migrating = false;
+}
+
 const saveCategories = (cats) =>
   backend.saveSettings(user.uid, {
     categories: cats.map((c) => {
       const kind = kindOf(c);
       const out = { id: c.id, name: c.name, kind, budget: kind === "expense" ? Number(c.budget) || 0 : 0, amounts: kind === "expense" ? [] : (c.amounts || []) };
       if (c.deletedFrom) out.deletedFrom = c.deletedFrom;
+      if (c.icon) out.icon = c.icon;
       return out;
     }),
   });
@@ -430,15 +529,16 @@ function render() {
   $("s-close").className = "stat-value " + (left < 0 ? "neg" : "");
   // Show the calculation: income minus what has actually gone out (ticked deductions + expenses)
   const pendingDeduct = Math.max(0, deduct - tot.auto.paidDeduct);
-  $("s-close-note").innerHTML = `${fmt(income)} הכנסות − ${fmt(expense)} שירדו בפועל`
-    + (pendingDeduct > 0 ? `<br>אחרי שיירדו עוד ${fmt(pendingDeduct)} בהורדות: <b>${fmt(left - pendingDeduct)}</b>` : "");
+  const hasData = income > 0 || expense > 0;
+  $("s-close-note").innerHTML = hasData
+    ? `${fmt(income)} הכנסות − ${fmt(expense)} שירדו בפועל`
+      + (pendingDeduct > 0 ? `<br>אחרי שיירדו עוד ${fmt(pendingDeduct)} בהורדות: <b>${fmt(left - pendingDeduct)}</b>` : "")
+    : `עוד אין הכנסות בחודש הזה. לחצו על "הכנסות החודש" כדי להזין את ההכנסה החודשית.`;
 
-  // How much of this period's income was spent
+  // How much of this period's income was spent: a bar inside the "left this month" card
   const pct = income > 0 ? (expense / income) * 100 : expense > 0 ? 100 : 0;
-  $("usage-text").innerHTML = income > 0 || expense > 0
-    ? `הוצאתם <b>${fmt(expense)}</b> מתוך <b>${fmt(income)}</b> שהכנסתם`
-    : `<span class="muted">עוד אין הכנסות בחודש הזה. הגדירו סכום קבוע בקטגוריית הכנסה (✎), או הוסיפו הכנסה.</span>`;
-  $("usage-pct").textContent = income > 0 ? `${Math.round(pct)}%` : "";
+  $("usage-pct").innerHTML = income > 0 ? `הוצאתם <bdi dir="ltr">${Math.round(pct)}%</bdi> מההכנסה` : "";
+  $("usage-bar").parentElement.classList.toggle("hidden", !hasData);
   $("usage-bar").style.width = Math.min(100, pct) + "%";
   $("usage-bar").className = expense > income ? "over" : pct >= 85 ? "warn" : "";
 
@@ -451,7 +551,7 @@ function render() {
   const incomeRows = isNum(man.income) ? (man.income > 0 ? [{ c: { name: "הכנסה חודשית" }, amount: man.income }] : []) : fixed;
   incomeRows.forEach(({ c, amount }) => items.push({ sort: startStr + " 00:00", html: `
     <div class="tx-item fixed-in">
-      <div class="tx-icon">${catIcon(c.name, "income")}</div>
+      <div class="tx-icon">${catIcon(c)}</div>
       <div class="tx-main"><div class="tx-title">${esc(c.name)}</div><div class="tx-sub">הכנסה חודשית · ${dotted(startStr)}</div></div>
       <div class="tx-side"><div class="tx-amt pos">+${fmtShort(amount)}</div></div>
     </div>` }));
@@ -461,7 +561,7 @@ function render() {
     const paidNow = !!paidMap[c.id];
     items.push({ sort: startStr + " 00:01", html: `
     <div class="tx-item ${paidNow ? "" : "pending"}">
-      <div class="tx-icon">${catIcon(c.name, "expense")}</div>
+      <div class="tx-icon">${catIcon(c)}</div>
       <div class="tx-main"><div class="tx-title">${esc(c.name)}</div><div class="tx-sub">הורדה קבועה · ${paidNow ? `<span class="d-ok">✓ ירד</span>` : "ממתין לסימון"}</div></div>
       <div class="tx-side"><div class="tx-amt neg">−${fmtShort(amount)}</div></div>
     </div>` });
@@ -498,7 +598,7 @@ function render() {
     const sub = [time ? `נרשם ב־${time}` : "", dotted(t.date), t.description ? esc(t.description) : ""].filter(Boolean).join(" · ");
     items.push({ sort, html: `
     <div class="tx-item ${t.date > today ? "future" : ""}" data-txedit="${esc(t.id)}" role="button" tabindex="0" aria-label="עריכת ${esc(t.category)} ${fmtShort(Number(t.amount))}">
-      <div class="tx-icon">${catIcon(t.category, t.type)}</div>
+      <div class="tx-icon">${iconForName(t.category)}</div>
       <div class="tx-main"><div class="tx-title">${esc(t.category)}</div><div class="tx-sub">${sub}</div></div>
       <div class="tx-side"><div class="tx-amt ${inc ? "pos" : "neg"}">${inc ? "+" : "−"}${fmtShort(Number(t.amount))}</div><div class="tx-hint">✎</div></div>
     </div>` });
@@ -511,7 +611,58 @@ function render() {
 
   const unplanned = periodTx.filter((t) => t.category === UNPLANNED && t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   $("unplanned-sum").textContent = unplanned > 0 ? `החודש: ${fmt(unplanned)}` : "";
+  renderBreakdown(periodTx, key);
+  renderCompare(sorted, key);
   renderChart(sorted);
+}
+
+// ----- Where the money went this month: one bar per category, largest first -----
+function renderBreakdown(periodTx, key) {
+  const by = {};
+  periodTx.filter((t) => t.type === "expense").forEach((t) => { by[t.category] = (by[t.category] || 0) + Number(t.amount); });
+  const rows = Object.entries(by).map(([name, amount]) => ({ name, icon: iconForName(name), amount }));
+  // Fixed deductions that have come out this month, as one row
+  const paidDeduct = getCategories().filter((c) => isFixed(c) && activeIn(c, key) && paidFor(key)[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0);
+  if (paidDeduct > 0) rows.push({ name: "הורדות קבועות", icon: "🔁", amount: paidDeduct });
+  rows.sort((a, b) => b.amount - a.amount);
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  $("breakdown-total").textContent = total > 0 ? `סה״כ ${fmt(total)}` : "";
+  if (!total) { $("breakdown").innerHTML = `<p class="muted center chart-empty">כשתוסיפו הוצאות החודש, תראו כאן על מה הלך הכסף.</p>`; return; }
+  const max = rows[0].amount;
+  $("breakdown").innerHTML = rows.map((r) => {
+    const pct = Math.round((r.amount / total) * 100);
+    return `<div class="bd-row">
+      <div class="bd-name"><span aria-hidden="true">${r.icon}</span>${esc(r.name)}</div>
+      <div class="bd-track"><div class="bd-fill" style="width:${(r.amount / max) * 100}%"></div></div>
+      <div class="bd-amt"><b>${fmt(r.amount)}</b><span class="muted"><bdi dir="ltr">${pct}%</bdi></span></div>
+    </div>`;
+  }).join("");
+}
+
+// ----- Personal expenses compared with the previous month -----
+// For the month in progress, compare up to the same day of the previous month, so a half month isn't set against a whole one.
+function renderCompare(sorted, key) {
+  const [y, m] = key.split("-").map(Number);
+  const p = new Date(y, m - 2, 1);
+  const prevKey = monthKey(p.getFullYear(), p.getMonth());
+  const spend = (list) => list.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  const prevTx = sorted.filter((t) => periodOf(t.date) === prevKey);
+  const curTx = sorted.filter((t) => periodOf(t.date) === key);
+  if (!prevTx.some((t) => t.type === "expense")) { $("s-compare").innerHTML = ""; return; }
+  const inProgress = periodOf(todayStr()) === key;
+  let prev = spend(prevTx), cur = spend(curTx), when = "מבחודש שעבר";
+  if (inProgress) {
+    const [start] = rangeOfKey(key), [pStart] = rangeOfKey(prevKey);
+    const days = Math.round((new Date(todayStr()) - new Date(ymd(start))) / 86400000);
+    const cutoff = new Date(pStart); cutoff.setDate(cutoff.getDate() + days);
+    prev = spend(prevTx.filter((t) => t.date <= ymd(cutoff)));
+    cur = spend(curTx.filter((t) => t.date <= todayStr()));
+    when = "מאשר עד אותו יום בחודש שעבר";
+  }
+  const diff = Math.round((cur - prev) * 100) / 100;
+  $("s-compare").innerHTML = Math.abs(diff) < 1
+    ? `הוצאות משתנות: בערך כמו ${inProgress ? "עד אותו יום בחודש שעבר" : "בחודש שעבר"}`
+    : `הוצאות משתנות: <b class="${diff > 0 ? "neg" : "pos"}">${diff > 0 ? "▲" : "▼"} ${fmt(Math.abs(diff))} ${diff > 0 ? "יותר" : "פחות"}</b> ${when}`;
 }
 
 function renderCategories(periodTx, key) {
@@ -539,6 +690,7 @@ function renderCategories(periodTx, key) {
       return `<div class="tile editing">
         <form class="tile-edit" data-editform="${id}">
           <label>שם<input name="name" maxlength="40" required value="${esc(c.name)}" /></label>
+          ${iconPicker(c)}
           ${kindField}
           ${amountField(kind !== "expense")}
           ${income ? "" : budgetField(kind === "expense")}
@@ -551,7 +703,8 @@ function renderCategories(periodTx, key) {
       </div>`;
     }
 
-    const head = `<div class="tile-head"><strong>${esc(c.name)}</strong><button class="icon-btn" data-edit="${id}" title="עריכה" aria-label="עריכת ${esc(c.name)}">✎</button></div>`;
+    const addBtn = `<button type="button" class="btn btn-sm tile-add" data-qadd="${esc(c.name)}" aria-label="הוספת הוצאה ב${esc(c.name)}">+ הוצאה</button>`;
+    const head = `<div class="tile-head"><strong><span class="cat-ico" aria-hidden="true">${catIcon(c)}</span>${esc(c.name)}</strong><button class="icon-btn" data-edit="${id}" title="עריכה" aria-label="עריכת ${esc(c.name)}">✎</button></div>`;
     const verb = income ? "הכנסה" : "הוצאה";
     const descPh = income ? "תיאור (למשל בונוס)" : kind === "fixed" ? "תיאור (למשל חיוב נוסף)" : "תיאור ההוצאה";
     const form = `<form class="quick" data-quick="${id}">
@@ -584,10 +737,10 @@ function renderCategories(periodTx, key) {
     const status = budget > 0
       ? (remaining >= 0 ? `<span>נשאר <b>${fmt(remaining)}</b></span>` : `<span class="neg">⚠️ עברתם את התקציב</span>`)
       : `<span class="muted">ללא תקציב</span>`;
-    return `<div class="tile ${level}">${head}
+    return `<div class="tile compact ${level}" data-qadd="${esc(c.name)}">${head}
       <div class="tile-nums"><span class="num-big">${fmt(spent)}</span>${budget > 0 ? `<span class="muted">מתוך ${fmt(budget)}</span>` : ""}${level === "over" ? `<span class="over-badge">חרגתם ב-${fmt(-remaining)}</span>` : ""}</div>
       ${budget > 0 ? `<div class="cat-bar"><div class="${level}" style="width:${pct}%"></div></div>` : ""}
-      <div class="tile-status">${status}</div>${form}</div>`;
+      <div class="tile-status">${status}</div>${addBtn}</div>`;
   };
 
   // One section per kind, each with its own subtotal
@@ -615,13 +768,39 @@ function quickDate() {
   return periodOf(todayStr()) === viewKey() ? todayStr() : ymd(periodStart(viewY, viewM));
 }
 
+// ----- Quick add (floating + button): amount, category, optional description -----
+let quickCat = null;
+function quickChoices() {
+  const cats = getCategories().filter((c) => kindOf(c) === "expense" && activeIn(c, viewKey()));
+  return [...cats.map((c) => ({ name: c.name, icon: catIcon(c), type: "expense" })),
+    { name: UNPLANNED, icon: "⚡", type: "expense" }, { name: "הכנסה", icon: "💰", type: "income" }];
+}
+function renderQuickCats() {
+  const list = quickChoices();
+  if (!list.some((x) => x.name === quickCat)) quickCat = list[0].name;
+  $("qa-cats").innerHTML = list.map((x) => `<button type="button" class="qa-chip ${x.name === quickCat ? "on" : ""} ${x.type === "income" ? "inc" : ""}" data-qcat="${esc(x.name)}" aria-pressed="${x.name === quickCat}">
+    <span aria-hidden="true">${x.icon}</span>${esc(x.name)}</button>`).join("");
+}
+function openQuick(open, cat) {
+  $("qa-sheet").classList.toggle("hidden", !open);
+  $("qa-fab").classList.toggle("hidden", open);
+  document.body.classList.toggle("sheet-open", open);
+  if (open) { $("qa-form").reset(); if (cat) quickCat = cat; renderQuickCats(); setTimeout(() => $("qa-amount").focus(), 50); }
+}
+
 let toastTimer;
-function toast(msg, isError) {
+function toast(msg, isError, action) {
   const t = $("toast");
   t.textContent = msg;
   t.className = "toast" + (isError ? " error-toast" : "");
+  if (action) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "toast-action"; b.textContent = action.label;
+    b.onclick = () => { t.classList.add("hidden"); action.run(); };
+    t.append(" ", b);
+  }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.add("hidden"), 2800);
+  toastTimer = setTimeout(() => t.classList.add("hidden"), action ? 6000 : 2800);
 }
 
 // Two-step confirmation without native dialogs (they can be blocked in embedded pages).
@@ -647,6 +826,10 @@ function renderChart(sorted) {
     m.bal = m.inc - m.out;
   }
 
+  // Nothing to show yet: a short note instead of an empty chart
+  const empty = months.every((m) => !m.inc && !m.out);
+  $("chart-legend").classList.toggle("hidden", empty);
+  if (empty) { $("chart").innerHTML = `<p class="muted center chart-empty">הגרף יופיע אחרי שתזינו הכנסה או תוסיפו הוצאות.</p>`; return; }
   const W = Math.max(320, Math.round($("chart").clientWidth) || 640), H = W < 500 ? 220 : 260, L = 48, R = 8, T = 12, B = 28;
   const vals = months.flatMap((m) => [m.inc, m.out, m.bal]);
   let hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
@@ -689,6 +872,8 @@ function showView(signedIn) {
   $("loading").classList.add("hidden");
   $("auth-view").classList.toggle("hidden", signedIn);
   $("app-view").classList.toggle("hidden", !signedIn);
+  $("qa-fab").classList.toggle("hidden", !signedIn);
+  if (!signedIn) { $("qa-sheet").classList.add("hidden"); document.body.classList.remove("sheet-open"); }
 }
 
 function onUser(u) {
@@ -701,10 +886,13 @@ function onUser(u) {
   $("user-email").textContent = u.email || "";
   showView(true);
   render();
-  unsub.push(backend.watchTransactions(u.uid, (list) => { txs = list; render(); }));
+  // Wait until both the transactions and the settings have come from the server before updating defaults
+  const ready = { tx: false, settings: false };
+  unsub.push(backend.watchTransactions(u.uid, (list, fresh) => { txs = list; if (fresh) ready.tx = true; render(); migrateDefaults(ready); }));
   viewInit = false;
-  unsub.push(backend.watchSettings(u.uid, (s) => {
+  unsub.push(backend.watchSettings(u.uid, (s, fresh) => {
     settings = s || {};
+    if (fresh) ready.settings = true;
     if (!viewInit) { viewInit = true; goToCurrentPeriod(); }
     if (settings.theme && JSON.stringify(settings.theme) !== JSON.stringify(theme)) {
       theme = { ...theme, ...settings.theme };
@@ -712,6 +900,7 @@ function onUser(u) {
       applyTheme();
     }
     render();
+    migrateDefaults(ready);
   }));
 }
 
@@ -749,6 +938,30 @@ function wireEvents() {
     } catch (ex) { toast(ex.message, true); }
   };
 
+  $("qa-fab").onclick = () => openQuick(true);
+  $("qa-close").onclick = () => openQuick(false);
+  $("qa-sheet").onclick = (e) => { if (e.target.id === "qa-sheet") openQuick(false); };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("qa-sheet").classList.contains("hidden")) openQuick(false); });
+  $("qa-cats").onclick = (e) => {
+    const b = e.target.closest("[data-qcat]");
+    if (!b) return;
+    quickCat = b.dataset.qcat; renderQuickCats();
+  };
+  $("qa-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const amount = Math.round(parseFloat($("qa-amount").value) * 100) / 100;
+    const choice = quickChoices().find((x) => x.name === quickCat);
+    if (!(amount > 0) || !choice) return;
+    const btn = $("qa-form").querySelector("button[type=submit]");
+    btn.disabled = true;
+    try {
+      await backend.addTransactions(user.uid, [{ type: choice.type, amount, description: $("qa-desc").value.trim(), category: choice.name, date: quickDate(), time: nowTime() }]);
+      openQuick(false);
+      toast(`נוספה ${choice.type === "income" ? "הכנסה" : "הוצאה"} של ${fmt(amount)} · ${choice.name}`);
+    } catch (ex) { toast("שמירה נכשלה: " + ex.message, true); }
+    btn.disabled = false;
+  };
+
   $("tx-body").onclick = (e) => {
     if (e.target.closest(".tx-edit") && !e.target.closest("[data-txcancel],[data-del]")) return;
     const ed = e.target.closest("[data-txedit]");
@@ -756,8 +969,18 @@ function wireEvents() {
     if (e.target.closest("[data-txcancel]")) { editingTx = null; render(); return; }
     const btn = e.target.closest("[data-del]");
     if (!btn) return;
-    confirmClick(btn, "למחוק?", () =>
-      backend.removeTransaction(user.uid, btn.dataset.del).then(() => { editingTx = null; render(); toast("התנועה נמחקה"); }).catch((ex) => toast(ex.message, true)));
+    confirmClick(btn, "למחוק?", async () => {
+      const gone = txs.find((t) => t.id === btn.dataset.del);
+      try {
+        await backend.removeTransaction(user.uid, btn.dataset.del);
+        editingTx = null; render();
+        if (!gone) return;
+        // Undo puts the same transaction back (with a new id)
+        const { id, createdAt, ...data } = gone;
+        toast("התנועה נמחקה", false, { label: "ביטול", run: () =>
+          backend.addTransactions(user.uid, [data]).then(() => toast("התנועה הוחזרה")).catch((ex) => toast(ex.message, true)) });
+      } catch (ex) { toast(ex.message, true); }
+    });
   };
 
 
@@ -872,7 +1095,7 @@ function wireEvents() {
       if (nameTaken(name, id, "fixed")) { toast("כבר יש הורדה בשם הזה", true); return; }
       const old = getCategories().find((c) => c.id === id);
       try {
-        await saveCategories(getCategories().map((c) => (c.id === id ? { ...c, name, amounts: setFixedAmount(c, amount) } : c)));
+        await saveCategories(getCategories().map((c) => (c.id === id ? { ...c, name, icon: df.icon ? df.icon.value : c.icon, amounts: setFixedAmount(c, amount) } : c)));
         editingDeduct = null; render();
         toast("נשמר");
       } catch (ex) { toast(ex.message, true); }
@@ -968,6 +1191,7 @@ function wireEvents() {
       const old = cats.find((c) => c.id === id);
       const update = (c) => {
         const kind = f.kind ? f.kind.value : kindOf(c);
+        c = { ...c, icon: f.icon ? f.icon.value : c.icon };
         const amount = f.fixed ? Math.max(0, parseFloat(f.fixed.value) || 0) : 0;
         if (kind === "fixed") return { ...c, name, kind, amounts: setFixedAmount(c, amount) };
         if (kind === "income") return { ...c, name, kind, amounts: withAmountFrom(c, viewKey(), amount) };
@@ -994,6 +1218,9 @@ function wireEvents() {
     const edit = e.target.closest("[data-edit]");
     if (edit) { editingCat = edit.dataset.edit; render(); $("cat-tiles").querySelector(".tile-edit input")?.focus(); return; }
     if (e.target.closest("[data-cancel]")) { editingCat = null; render(); return; }
+    // Tapping a category card (or its + button) opens quick add with that category picked
+    const qadd = e.target.closest("[data-qadd]");
+    if (qadd && !e.target.closest(".tile-edit")) { openQuick(true, qadd.dataset.qadd); return; }
     const del = e.target.closest("[data-delcat]");
     if (del) {
       confirmClick(del, "בטוח?", async () => {
@@ -1041,7 +1268,7 @@ const ACCENTS = [
   { id: "orange", label: "כתום", c: "#ea580c" }, { id: "red", label: "אדום", c: "#dc2626" }, { id: "pink", label: "ורוד", c: "#db2777" },
   { id: "purple", label: "סגול", c: "#9333ea" }, { id: "indigo", label: "אינדיגו", c: "#4f46e5" }, { id: "slate", label: "אפור", c: "#475569" },
 ];
-let theme = { mode: "auto", accent: "blue" };
+let theme = { mode: "dark", accent: "blue" };
 try { theme = { ...theme, ...JSON.parse(localStorage.getItem("cashflow-theme") || "{}") }; } catch {}
 const darkMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 

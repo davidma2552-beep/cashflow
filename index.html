@@ -2,12 +2,14 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0f1218" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#f5f6f8" />
   <title>תזרים מזומנים</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=2026112303" />
 </head>
 <body>
   <div id="demo-banner" class="banner hidden">
@@ -73,10 +75,12 @@
       <div class="stats">
         <div class="stat" id="stat-income"></div>
         <div class="stat" id="stat-deduct"></div>
-        <div class="stat stat-left"><div class="stat-label">נשאר החודש</div><div id="s-close" class="stat-value"></div><div id="s-close-note" class="stat-note"></div></div>
-        <div class="stat usage">
-          <div class="row between"><span id="usage-text"></span><span id="usage-pct" class="muted"></span></div>
+        <div class="stat stat-left">
+          <div class="stat-label row between"><span>נשאר החודש</span><span id="usage-pct"></span></div>
+          <div id="s-close" class="stat-value"></div>
           <div class="cat-bar usage-bar"><div id="usage-bar"></div></div>
+          <div id="s-close-note" class="stat-note"></div>
+          <div id="s-compare" class="stat-note compare"></div>
         </div>
       </div>
 
@@ -85,7 +89,7 @@
           <h3>קטגוריות ותקציב חודשי</h3>
           <div id="budget-total" class="muted"></div>
         </div>
-        <p class="muted small">כאן מנהלים את <b>ההוצאות האישיות</b> (מזון, בילויים וכו׳): מזינים הוצאה מתוך הכרטיס, עם תיאור וסכום, ואפשר לקבוע תקציב חודשי. את ההכנסה מזינים בתיבה "הכנסות החודש" למעלה, וההורדות הקבועות (שכירות, סלולר, ביטוח) נמצאות ברשימה שבתיבה "הורדות חודשיות קבועות". כל הקטגוריות עוברות לחודש הבא, ורק מה שהוזן מתאפס.</p>
+        <p class="muted small">הוצאות שמשתנות מחודש לחודש. לחצו על כרטיס כדי להוסיף הוצאה, ועל ✎ כדי לשנות שם, אייקון או תקציב.</p>
         <div id="cat-tiles"></div>
         <div class="adders">
           <form id="cat-form" class="adder">
@@ -111,19 +115,6 @@
         </div>
       </div>
 
-      <div class="section">
-        <div class="card">
-          <div class="row between">
-            <h3>תזרים 12 חודשים</h3>
-            <div class="legend"><span class="dot in"></span>הכנסות <span class="dot out"></span>הוצאות <span class="dot bal"></span>נשאר בכל חודש</div>
-          </div>
-          <div id="chart" class="chart"></div>
-          <div class="row settings-row">
-            <button id="export-btn" class="btn btn-ghost btn-sm">ייצוא ל-CSV</button>
-          </div>
-        </div>
-      </div>
-
       <div class="grid single">
         <div class="card span2">
           <div class="row between tx-head">
@@ -136,6 +127,29 @@
           </div>
           <div id="tx-body" class="tx-list"></div>
           <p id="empty" class="muted center hidden">אין תנועות בחודש הזה עדיין.</p>
+          <div class="row settings-row">
+            <button id="export-btn" class="btn btn-ghost btn-sm" title="מוריד את כל התנועות מכל החודשים כקובץ שנפתח באקסל">⬇️ ייצוא כל התנועות ל-CSV</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="card">
+          <div class="row between">
+            <h3>על מה הלך הכסף החודש</h3>
+            <span id="breakdown-total" class="muted"></span>
+          </div>
+          <div id="breakdown" class="breakdown"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="card">
+          <div class="row between">
+            <h3>תזרים 12 חודשים</h3>
+            <div id="chart-legend" class="legend"><span class="dot in"></span>הכנסות <span class="dot out"></span>הוצאות <span class="dot bal"></span>נשאר בכל חודש</div>
+          </div>
+          <div id="chart" class="chart"></div>
         </div>
       </div>
 
@@ -154,9 +168,21 @@
     </main>
   </section>
 
+  <!-- הוספה מהירה (בטלפון) -->
+  <button id="qa-fab" class="qa-fab hidden" type="button" aria-label="הוספת הוצאה מהירה">+</button>
+  <div id="qa-sheet" class="qa-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="qa-title">
+    <form id="qa-form" class="qa-panel">
+      <div class="row between"><h3 id="qa-title">הוספה מהירה</h3><button type="button" id="qa-close" class="icon-btn" aria-label="סגירה">✕</button></div>
+      <input id="qa-amount" type="number" step="0.01" min="0.01" required inputmode="decimal" placeholder="סכום ₪" aria-label="סכום" />
+      <div id="qa-cats" class="qa-cats" role="group" aria-label="קטגוריה"></div>
+      <input id="qa-desc" maxlength="100" placeholder="תיאור (לא חובה)" aria-label="תיאור" />
+      <button type="submit" class="btn btn-primary">הוספה</button>
+    </form>
+  </div>
+
   <div id="toast" class="toast hidden" role="status"></div>
   <div id="loading" class="loading">טוען…</div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=2026112303"></script>
 </body>
 </html>
