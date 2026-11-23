@@ -1,33 +1,19 @@
 :root {
-  --bg: #f5f6f8;
-  --card: #ffffff;
-  --text: #1c2230;
-  --muted: #6b7280;
-  --border: #e3e6eb;
-  --primary: #2563eb;
+  /* The site is always dark, whatever the device's light/dark setting */
+  color-scheme: dark;
+  --bg: #0f1218;
+  --card: #181c24;
+  --text: #e6e8ec;
+  --muted: #9aa3b2;
+  --border: #2a303b;
+  --primary: #4f86f7;
   --primary-ink: #ffffff;
-  --pos: #15803d;
-  --neg: #c2410c;
-  --bal: #2563eb;
-  --in-bar: #22a55a;
-  --out-bar: #e8743b;
-  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.04);
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1218;
-    --card: #181c24;
-    --text: #e6e8ec;
-    --muted: #9aa3b2;
-    --border: #2a303b;
-    --primary: #4f86f7;
-    --pos: #4ade80;
-    --neg: #fb923c;
-    --bal: #7aa5ff;
-    --in-bar: #34c46f;
-    --out-bar: #f08a52;
-    --shadow: none;
-  }
+  --pos: #4ade80;
+  --neg: #fb923c;
+  --bal: #7aa5ff;
+  --in-bar: #34c46f;
+  --out-bar: #f08a52;
+  --shadow: none;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
