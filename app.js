@@ -1328,6 +1328,29 @@ function wireTheme() {
 }
 applyTheme();
 
+// ---------- Stay up to date ----------
+// GitHub Pages lets browsers keep the page for up to 10 minutes. On open (and when the app comes back
+// to the foreground) we fetch index.html fresh; if it points to a newer app.js, reload once onto it.
+const MY_VERSION = new URL(import.meta.url).searchParams.get("v") || "";
+async function checkForUpdate() {
+  try {
+    const res = await fetch(`./index.html?check=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) return;
+    const latest = ((await res.text()).match(/app\.js\?v=([\w.-]+)/) || [])[1];
+    if (!latest || !MY_VERSION || latest === MY_VERSION) return;
+    const key = "cashflow-reloaded-to";
+    if (sessionStorage.getItem(key) === latest) return; // never loop
+    sessionStorage.setItem(key, latest);
+    const url = new URL(location.href);
+    url.searchParams.set("v", latest);
+    location.replace(url.toString());
+  } catch {}
+}
+if (!DEMO) {
+  checkForUpdate();
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
+}
+
 // ---------- Boot ----------
 (async () => {
   try {
