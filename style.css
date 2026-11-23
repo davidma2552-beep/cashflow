@@ -338,3 +338,5 @@ tr.editing-row td { background: color-mix(in srgb, var(--primary) 6%, transparen
 @media (max-width: 860px) {
   input, select, textarea { font-size: 16px !important; }
 }
+
+.d-hint { display: block; font-size: .76rem; color: var(--muted); line-height: 1.45; margin-top: .3rem; }

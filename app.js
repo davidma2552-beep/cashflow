@@ -195,11 +195,9 @@ const dm = (d) => `${d.getDate()}.${d.getMonth() + 1}`;
 
 // ---------- Categories ----------
 // Three kinds: income, "fixed" (a monthly deduction that comes off automatically), and "expense" (personal, entered by hand).
-const DEFAULT_CATS = [
-  { name: "משכורת", kind: "income" },
-  ...["שכירות", "חשבונות"].map((name) => ({ name, kind: "fixed" })),
-  ...["מזון", "רכב", "בילויים", "אחר"].map((name) => ({ name, kind: "expense" })),
-];
+// What a new user starts with: four personal-expense categories, and an empty fixed-deductions list.
+const DEFAULT_CATS = ["שכירות", "סופר", "רכב", "אחר"].map((name) => ({ name, kind: "expense" }));
+const DEDUCT_HINT = "כאן מוסיפים הורדות שיורדות כל חודש בסכום קבוע, כמו שכירות, סלולר, ביטוח, הלוואה או מנויים.";
 const KINDS = {
   income: { label: "הכנסה", group: "💰 הכנסות", cls: "pos" },
   fixed: { label: "הורדה חודשית", group: "🔁 הורדות חודשיות", cls: "neg" },
@@ -266,7 +264,7 @@ function drawerHTML(key) {
     </div>`;
   }).join("");
   return `<div class="drawer">
-    <div class="drawer-sum muted">${items.length ? `ירדו ${done.length} מתוך ${items.length}${pending > 0 ? ` · עוד צפוי לרדת ${fmt(pending)}` : ""}` : "אין עדיין הורדות קבועות"}</div>
+    <div class="drawer-sum muted">${items.length ? `ירדו ${done.length} מתוך ${items.length}${pending > 0 ? ` · עוד צפוי לרדת ${fmt(pending)}` : ""}` : `<span class="d-hint">${DEDUCT_HINT}</span>`}</div>
     <div class="d-list">${rows}</div>
     ${items.length ? `<div class="d-total"><span>סה״כ</span><b>${fmt(total)}</b></div>` : ""}
     <form id="drawer-add" class="drawer-add">
@@ -397,16 +395,16 @@ function render() {
   const fixedCats = getCategories().filter((c) => isFixed(c) && activeIn(c, key));
   const paidCount = fixedCats.filter((c) => paidFor(key)[c.id]).length;
   const drawerBtn = `<button type="button" class="drawer-toggle ${drawerOpen ? "open" : ""}" data-drawer aria-expanded="${drawerOpen}">
-      ${fixedCats.length ? `סומנו ${paidCount}/${fixedCats.length} · ` : ""}${drawerOpen ? "סגירת הרשימה ▴" : "פתיחת הרשימה ▾"}</button>`;
+      ${fixedCats.length ? `סומנו ${paidCount}/${fixedCats.length} · ` : ""}${drawerOpen ? "סגירת הרשימה ▴" : fixedCats.length ? "פתיחת הרשימה ▾" : "+ הוספת הורדות ▾"}</button>`;
   // How much of the list has come out so far (the ticked items)
   const paidSum = fixedCats.filter((c) => paidFor(key)[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0);
   const paidPct = deduct > 0 ? Math.min(100, (paidSum / deduct) * 100) : 0;
   $("stat-deduct").innerHTML = `<div class="stat-label">${STAT_LABELS.deduct}</div>
     <button class="stat-value as-btn total" data-drawer title="פתיחת הרשימה">${fmt(deduct)}</button>
-    <div class="paid-meter" role="progressbar" aria-valuemin="0" aria-valuemax="${deduct}" aria-valuenow="${paidSum}" aria-label="ירד ${fmt(paidSum)} מתוך ${fmt(deduct)}">
+    ${fixedCats.length ? `<div class="paid-meter" role="progressbar" aria-valuemin="0" aria-valuemax="${deduct}" aria-valuenow="${paidSum}" aria-label="ירד ${fmt(paidSum)} מתוך ${fmt(deduct)}">
       <div class="paid-fill ${paidSum >= deduct && deduct > 0 ? "full" : ""}" style="width:${paidPct}%"></div>
     </div>
-    <div class="paid-text">ירד <b>${fmt(paidSum)}</b> מתוך <b>${fmt(deduct)}</b></div>
+    <div class="paid-text">ירד <b>${fmt(paidSum)}</b> מתוך <b>${fmt(deduct)}</b></div>` : drawerOpen ? "" : `<div class="d-hint">אפשר להוסיף הורדות קבועות כמו שכירות, סלולר, ביטוח וכו׳</div>`}
     ${drawerBtn}${drawerOpen ? drawerHTML(key) : ""}`;
   const showDrawer = drawerOpen;
   $("stat-deduct").classList.toggle("with-drawer", showDrawer);
@@ -747,8 +745,9 @@ function wireEvents() {
 
 
   // ----- Categories -----
-  const nameTaken = (name, exceptId) =>
-    liveCategories().some((c) => c.id !== exceptId && c.name.trim().toLowerCase() === name.toLowerCase());
+  // Names must be unique within a kind; a fixed deduction may share a name with a personal-expense category
+  const nameTaken = (name, exceptId, kind = "expense") =>
+    liveCategories().some((c) => c.id !== exceptId && kindOf(c) === kind && c.name.trim().toLowerCase() === name.toLowerCase());
 
   const CAT_VALUE_PH = { income: "סכום קבוע כל חודש ₪ (לא חובה)", expense: "תקציב חודשי ₪ (לא חובה)" };
   $("cat-kind").onchange = () => { $("cat-budget").placeholder = CAT_VALUE_PH[$("cat-kind").value]; };
@@ -853,11 +852,10 @@ function wireEvents() {
       const name = df.name.value.trim();
       const amount = Math.max(0, parseFloat(df.amount.value) || 0);
       if (!name) return;
-      if (nameTaken(name, id)) { toast("כבר יש קטגוריה בשם הזה", true); return; }
+      if (nameTaken(name, id, "fixed")) { toast("כבר יש הורדה בשם הזה", true); return; }
       const old = getCategories().find((c) => c.id === id);
       try {
         await saveCategories(getCategories().map((c) => (c.id === id ? { ...c, name, amounts: setFixedAmount(c, amount) } : c)));
-        if (old && old.name !== name && backend.renameCategory) await backend.renameCategory(user.uid, old.name, name);
         editingDeduct = null; render();
         toast("נשמר");
       } catch (ex) { toast(ex.message, true); }
@@ -869,7 +867,7 @@ function wireEvents() {
     const name = f.name.value.trim();
     const amount = Math.max(0, parseFloat(f.amount.value) || 0);
     if (!name) return;
-    if (nameTaken(name)) { toast("כבר יש קטגוריה בשם הזה", true); return; }
+    if (nameTaken(name, null, "fixed")) { toast("כבר יש הורדה בשם הזה", true); return; }
     const cat = { id: newId(), name, kind: "fixed", budget: 0, amounts: amount > 0 ? [{ from: effectiveDate(viewKey()), amount }] : [] };
     try {
       await saveCategories([...getCategories(), cat]);
@@ -946,7 +944,7 @@ function wireEvents() {
       const id = f.dataset.editform;
       const name = f.name.value.trim();
       if (!name) return;
-      if (nameTaken(name, id)) { toast("כבר יש קטגוריה בשם הזה", true); return; }
+      if (nameTaken(name, id, f.kind ? f.kind.value : "expense")) { toast("כבר יש קטגוריה בשם הזה", true); return; }
       const old = cats.find((c) => c.id === id);
       const update = (c) => {
         const kind = f.kind ? f.kind.value : kindOf(c);
