@@ -340,3 +340,36 @@ tr.editing-row td { background: color-mix(in srgb, var(--primary) 6%, transparen
 }
 
 .d-hint { display: block; font-size: .76rem; color: var(--muted); line-height: 1.45; margin-top: .3rem; }
+
+/* Undo button inside the toast */
+.toast-action { background: none; border: 0; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0 .3rem; }
+.grid.single { margin-bottom: 1rem; }
+
+/* Phones: each transaction is a small card so the amount is always visible */
+@media (max-width: 600px) {
+  .table-wrap { overflow: visible; }
+  .table-wrap table, .table-wrap tbody { display: block; }
+  .table-wrap thead { display: none; }
+  .table-wrap tr {
+    display: grid; grid-template-columns: auto auto 1fr auto auto; align-items: center;
+    grid-template-areas: "desc desc desc amt act" "cat date time bal act";
+    column-gap: .5rem; row-gap: .25rem; padding: .6rem .2rem; border-bottom: 1px solid var(--border);
+  }
+  .table-wrap td, .table-wrap tr.fixed td { border: 0; padding: 0; background: transparent; }
+  .table-wrap tr.fixed { background: color-mix(in srgb, var(--pos) 6%, transparent); border-radius: 8px; padding-inline: .45rem; }
+  .table-wrap tr.fixed.out { background: color-mix(in srgb, var(--neg) 6%, transparent); }
+  .table-wrap tr.fixed.out.pending { background: transparent; opacity: .6; }
+  .table-wrap tr.fixed.out.pending td { opacity: 1; }
+  .table-wrap td.desc { grid-area: desc; min-width: 0; font-weight: 500; }
+  .table-wrap td.c-amt { grid-area: amt; font-weight: 700; }
+  .table-wrap td.c-cat { grid-area: cat; }
+  .table-wrap td.c-date { grid-area: date; color: var(--muted); font-size: .8rem; }
+  .table-wrap td.time { grid-area: time; font-size: .8rem; }
+  .table-wrap td.c-bal { grid-area: bal; font-size: .8rem; color: var(--muted); direction: rtl; }
+  .table-wrap td.c-bal:not(:empty)::before { content: "נשאר "; }
+  .table-wrap td.c-bal.neg { color: var(--neg); }
+  .table-wrap td.row-actions { grid-area: act; display: flex; flex-direction: column; gap: .2rem; }
+  .table-wrap tr.editing-row { display: block; }
+  .table-wrap tr.editing-row td { display: block; }
+  .table-wrap .tx-edit { position: static; width: auto; }
+}

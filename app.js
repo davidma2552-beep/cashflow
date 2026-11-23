@@ -328,7 +328,10 @@ function getCategories() {
   return DEFAULT_CATS.map((c) => ({ id: "default-" + c.name, budget: 0, amounts: [], ...c }));
 }
 // A deleted category stays visible in the periods before it was deleted, so past months don't change.
-const activeIn = (c, key) => !c.deletedFrom || effectiveDate(key) < asDate(c.deletedFrom);
+// A fixed deduction counts only from the period it was added in, so months before it don't show it.
+const fixedStart = (c) => (c.amounts || []).map((h) => asDate(h.from)).sort()[0];
+const activeIn = (c, key) => (!c.deletedFrom || effectiveDate(key) < asDate(c.deletedFrom))
+  && !(c.kind === "fixed" && fixedStart(c) && fixedStart(c) > ymd(rangeOfKey(key)[1]));
 const liveCategories = () => getCategories().filter((c) => !c.deletedFrom);
 
 // Fixed monthly income: a history of {from: date, amount}. Each period uses the latest change made on or before its last day.
@@ -491,13 +494,13 @@ function render() {
   const fixedRows = incomeRows.map(({ c, amount }) => {
     bal += amount;
     return `<tr class="fixed">
-      <td>${dateCell(ymd(start))}</td>
+      <td class="c-date">${dateCell(ymd(start))}</td>
       <td class="time"><span class="muted">—</span></td>
       <td class="desc"><span class="muted">הכנסה חודשית</span></td>
-      <td><span class="tag">${esc(c.name)}</span></td>
-      <td class="num pos">+${fmt(amount)}</td>
-      <td class="num">${fmt(bal)}</td>
-      <td></td>
+      <td class="c-cat"><span class="tag">${esc(c.name)}</span></td>
+      <td class="num c-amt pos">+${fmt(amount)}</td>
+      <td class="num c-bal">${fmt(bal)}</td>
+      <td class="row-actions"></td>
     </tr>`;
   });
   // Fixed deductions only come off the running total once they are ticked as paid (same as "נשאר החודש")
@@ -506,13 +509,13 @@ function render() {
     const paidNow = !!paidMap[c.id];
     if (paidNow) bal -= amount;
     return `<tr class="fixed out ${paidNow ? "" : "pending"}">
-      <td>${dateCell(ymd(start))}</td>
+      <td class="c-date">${dateCell(ymd(start))}</td>
       <td class="time"><span class="muted">—</span></td>
       <td class="desc">${paidNow ? `<span class="muted">הורדה חודשית</span> <span class="d-ok">✓ ירד</span>` : `<span class="muted">הורדה חודשית · ממתין</span>`}</td>
-      <td><span class="tag">${esc(c.name)}</span></td>
-      <td class="num neg">−${fmt(amount)}</td>
-      <td class="num ${bal < 0 ? "neg" : ""}">${paidNow ? fmt(bal) : `<span class="muted">—</span>`}</td>
-      <td></td>
+      <td class="c-cat"><span class="tag">${esc(c.name)}</span></td>
+      <td class="num c-amt neg">−${fmt(amount)}</td>
+      <td class="num c-bal ${bal < 0 ? "neg" : ""}">${paidNow ? fmt(bal) : `<span class="muted">—</span>`}</td>
+      <td class="row-actions"></td>
     </tr>`;
   });
   const catOptions = (t) => {
@@ -540,12 +543,12 @@ function render() {
       </td></tr>`;
     }
     return `<tr class="${t.date > today ? "future" : ""}">
-      <td>${dateCell(t.date)}</td>
+      <td class="c-date">${dateCell(t.date)}</td>
       <td class="time">${txTime(t) || `<span class="muted">—</span>`}</td>
       <td class="desc">${t.description ? esc(t.description) : `<span class="muted">—</span>`}</td>
-      <td><span class="tag">${esc(t.category)}</span></td>
-      <td class="num ${t.type === "income" ? "pos" : "neg"}">${t.type === "income" ? "+" : "−"}${fmt(Number(t.amount))}</td>
-      <td class="num ${bal < 0 ? "neg" : ""}">${fmt(bal)}</td>
+      <td class="c-cat"><span class="tag">${esc(t.category)}</span></td>
+      <td class="num c-amt ${t.type === "income" ? "pos" : "neg"}">${t.type === "income" ? "+" : "−"}${fmt(Number(t.amount))}</td>
+      <td class="num c-bal ${bal < 0 ? "neg" : ""}">${fmt(bal)}</td>
       <td class="row-actions"><button class="icon-btn edit-tx" data-txedit="${esc(t.id)}" title="עריכה" aria-label="עריכת התנועה">✎</button><button class="icon-btn" data-del="${esc(t.id)}" title="מחיקה" aria-label="מחיקה">✕</button></td>
     </tr>`;
   });
@@ -661,12 +664,18 @@ function quickDate() {
 }
 
 let toastTimer;
-function toast(msg, isError) {
+function toast(msg, isError, action) {
   const t = $("toast");
   t.textContent = msg;
   t.className = "toast" + (isError ? " error-toast" : "");
+  if (action) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "toast-action"; b.textContent = action.label;
+    b.onclick = () => { t.classList.add("hidden"); action.run(); };
+    t.append(" ", b);
+  }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.add("hidden"), 2800);
+  toastTimer = setTimeout(() => t.classList.add("hidden"), action ? 6000 : 2800);
 }
 
 // Two-step confirmation without native dialogs (they can be blocked in embedded pages).
@@ -799,8 +808,17 @@ function wireEvents() {
     if (e.target.closest("[data-txcancel]")) { editingTx = null; render(); return; }
     const btn = e.target.closest("[data-del]");
     if (!btn) return;
-    confirmClick(btn, "למחוק?", () =>
-      backend.removeTransaction(user.uid, btn.dataset.del).catch((ex) => toast(ex.message, true)));
+    confirmClick(btn, "למחוק?", async () => {
+      const gone = txs.find((t) => t.id === btn.dataset.del);
+      try {
+        await backend.removeTransaction(user.uid, btn.dataset.del);
+        if (!gone) return;
+        // Undo puts the same transaction back (with a new id)
+        const { id, createdAt, ...data } = gone;
+        toast("התנועה נמחקה", false, { label: "ביטול", run: () =>
+          backend.addTransactions(user.uid, [data]).then(() => toast("התנועה הוחזרה")).catch((ex) => toast(ex.message, true)) });
+      } catch (ex) { toast(ex.message, true); }
+    });
   };
 
 
