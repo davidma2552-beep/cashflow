@@ -26,10 +26,10 @@ async function createFirebaseBackend() {
     reset: (e) => A.sendPasswordResetEmail(auth, e),
     signOut: () => A.signOut(auth),
     watchTransactions(uid, cb) {
-      return F.onSnapshot(txCol(uid), (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+      return F.onSnapshot(txCol(uid), (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })), !snap.metadata.fromCache));
     },
     watchSettings(uid, cb) {
-      return F.onSnapshot(userDoc(uid), (d) => cb(d.exists() ? d.data() : {}));
+      return F.onSnapshot(userDoc(uid), (d) => cb(d.exists() ? d.data() : {}, !d.metadata.fromCache));
     },
     async addTransactions(uid, list) {
       const batch = F.writeBatch(db);
@@ -81,12 +81,12 @@ function createDemoBackend() {
     signOut: async () => setUser(null),
     watchTransactions(uid, cb) {
       listeners.tx = [cb];
-      setTimeout(() => cb([...userData(uid).tx]));
+      setTimeout(() => cb([...userData(uid).tx], true));
       return () => { listeners.tx = []; };
     },
     watchSettings(uid, cb) {
       listeners.settings = [cb];
-      setTimeout(() => cb({ ...userData(uid).settings }));
+      setTimeout(() => cb({ ...userData(uid).settings }, true));
       return () => { listeners.settings = []; };
     },
     async addTransactions(uid, list) {
@@ -356,6 +356,62 @@ function withAmountFrom(c, key, amount) {
   if (fixedAmount(c, key) === amount) return c.amounts || [];
   const from = effectiveDate(key);
   return [...(c.amounts || []).filter((h) => asDate(h.from) !== from), { from, amount }];
+}
+
+// ----- Bringing existing users up to the current defaults -----
+// Users who saved their categories before the defaults changed still hold the old default list.
+// Once per user: drop old defaults they never touched (not renamed, no amount or budget, no transactions,
+// never ticked), and add the new defaults they don't have. Anything the user added or edited stays as it is.
+const DEFAULTS_VERSION = 2;
+// Every default category ever shipped, with the kinds it shipped as
+const OLD_DEFAULTS = { "משכורת": ["income"], "שכירות": ["expense", "fixed"], "חשבונות": ["expense", "fixed"], "מזון": ["expense"], "רכב": ["expense"], "בילויים": ["expense"], "אחר": ["expense"] };
+const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+function untouchedOldDefault(c) {
+  const kinds = OLD_DEFAULTS[c.name];
+  if (!kinds || c.id !== "default-" + c.name || c.deletedFrom) return false;
+  if (!kinds.includes(c.kind || "expense")) return false;
+  if (Number(c.budget) > 0 || (c.amounts || []).some((h) => Number(h.amount) > 0)) return false;
+  if (txs.some((t) => t.category === c.name)) return false;
+  if (Object.values(settings.paid || {}).some((m) => m && m[c.id])) return false;
+  return true;
+}
+function migratedCategories(cats) {
+  const out = [];
+  const replaced = new Set();
+  for (const c of cats) {
+    if (!untouchedOldDefault(c)) { out.push(c); continue; }
+    const isNewDefault = DEFAULT_CATS.some((d) => d.name === c.name);
+    if (isNewDefault && kindOf(c) === "expense") out.push(c); // already matches the new defaults
+    else if (isNewDefault) { replaced.add(c.name); out.push({ id: "default2-" + c.name, name: c.name, kind: "expense", budget: 0, amounts: [] }); }
+    // otherwise an unused old default: dropped
+  }
+  // New defaults that were never part of the old list (סופר): add unless the user already has one by that name
+  const added = DEFAULT_CATS.filter((d) => !OLD_DEFAULTS[d.name] && !out.some((c) => !c.deletedFrom && sameName(c.name, d.name)))
+    .map((d) => ({ id: "default2-" + d.name, name: d.name, kind: "expense", budget: 0, amounts: [] }));
+  if (added.length) {
+    // Place it in the new defaults' order: after the last live personal-expense category that comes before it there
+    for (const a of added) {
+      const before = DEFAULT_CATS.slice(0, DEFAULT_CATS.findIndex((d) => d.name === a.name)).map((d) => d.name);
+      let at = -1;
+      out.forEach((c, i) => { if (!c.deletedFrom && kindOf(c) === "expense" && before.includes(c.name)) at = i; });
+      if (at < 0) at = out.findIndex((c) => !c.deletedFrom && kindOf(c) === "expense") - 1;
+      out.splice(at < 0 ? out.length : at + 1, 0, a);
+    }
+  }
+  return out;
+}
+let migrating = false;
+async function migrateDefaults(ready) {
+  if (!user || migrating || !ready.tx || !ready.settings) return;
+  if ((Number(settings.defaultsVersion) || 0) >= DEFAULTS_VERSION) return;
+  migrating = true;
+  const uid = user.uid;
+  try {
+    // Users who never saved categories already see the current defaults
+    if (Array.isArray(settings.categories)) await saveCategories(migratedCategories(settings.categories));
+    if (user && user.uid === uid) await backend.saveSettings(uid, { defaultsVersion: DEFAULTS_VERSION });
+  } catch (e) { console.warn("defaults update skipped", e); }
+  migrating = false;
 }
 
 const saveCategories = (cats) =>
@@ -690,12 +746,16 @@ function onUser(u) {
   $("user-email").textContent = u.email || "";
   showView(true);
   render();
-  unsub.push(backend.watchTransactions(u.uid, (list) => { txs = list; render(); }));
+  // Wait until both the transactions and the settings have come from the server before updating defaults
+  const ready = { tx: false, settings: false };
+  unsub.push(backend.watchTransactions(u.uid, (list, fresh) => { txs = list; if (fresh) ready.tx = true; render(); migrateDefaults(ready); }));
   viewInit = false;
-  unsub.push(backend.watchSettings(u.uid, (s) => {
+  unsub.push(backend.watchSettings(u.uid, (s, fresh) => {
     settings = s || {};
+    if (fresh) ready.settings = true;
     if (!viewInit) { viewInit = true; goToCurrentPeriod(); }
     render();
+    migrateDefaults(ready);
   }));
 }
 
