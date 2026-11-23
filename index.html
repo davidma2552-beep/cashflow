@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f5f6f8" />
   <title>תזרים מזומנים</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -45,6 +46,15 @@
       <div class="brand">💰 תזרים מזומנים</div>
       <div class="user">
         <span id="user-email" class="muted"></span>
+        <div class="theme-wrap">
+          <button id="theme-btn" class="btn btn-ghost btn-sm" aria-haspopup="true" aria-expanded="false" title="צבעי האתר">🎨 צבעים</button>
+          <div id="theme-pop" class="theme-pop hidden" role="dialog" aria-label="צבעי האתר">
+            <div class="theme-title">רקע</div>
+            <div id="theme-modes" class="theme-modes"></div>
+            <div class="theme-title">צבע ראשי</div>
+            <div id="theme-accents" class="theme-accents"></div>
+          </div>
+        </div>
         <button id="logout-btn" class="btn btn-ghost btn-sm">התנתקות</button>
       </div>
     </header>
@@ -124,12 +134,7 @@
               <button type="submit" class="btn btn-primary btn-sm">+ הכנסה</button>
             </form>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>תאריך</th><th>שעה</th><th>תיאור</th><th>קטגוריה</th><th class="num">סכום</th><th class="num">נשאר</th><th></th></tr></thead>
-              <tbody id="tx-body"></tbody>
-            </table>
-          </div>
+          <div id="tx-body" class="tx-list"></div>
           <p id="empty" class="muted center hidden">אין תנועות בחודש הזה עדיין.</p>
         </div>
       </div>

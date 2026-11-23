@@ -120,6 +120,22 @@ const $ = (id) => document.getElementById(id);
 const money = new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 2 });
 const compact = new Intl.NumberFormat("he-IL", { notation: "compact", maximumFractionDigits: 1 });
 const fmt = (n) => money.format(n);
+const moneyShort = new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const fmtShort = (n) => moneyShort.format(n);
+// An icon for each category, guessed from its name
+const CAT_ICONS = [
+  [/סופר|מכולת|קניות|שופרסל|רמי לוי/, "🛒"], [/אוכל|מזון|מסעד|וולט|ארוח|קפה/, "🍔"], [/רכב|דלק|חניה|מוסך|טסט/, "🚗"],
+  [/שכיר|דירה|משכנתא|ארנונה|בית/, "🏠"], [/חשמל|מים|גז|חשבונ/, "💡"], [/סלולר|טלפון|אינטרנט|פלאפון/, "📱"],
+  [/ביטוח/, "🛡️"], [/הלווא|בנק|עמל/, "🏦"], [/מנוי|נטפליקס|ספוטיפיי|סטרימינג/, "📺"], [/בילוי|יציא|דייט|בר|מסיב/, "🍹"],
+  [/מתנ|חריג/, "🎁"], [/תספורת|מספר|יופי|קוסמטיק/, "💈"], [/בריאות|רופא|תרופ|קופת/, "💊"], [/ביגוד|בגד|נעל/, "👕"],
+  [/חינוך|לימוד|קורס|ספר/, "📚"], [/ספורט|חדר כושר|כושר/, "🏋️"], [/חיסכון|השקע/, "🐷"], [/תחבור|אוטובוס|רכבת|מונית/, "🚌"],
+  [/טיול|חופש|נסיע|טיס/, "✈️"], [/ילד|גן|בייביסיטר/, "🧸"], [/חיות|כלב|חתול|וטרינר/, "🐾"], [/לא צפוי/, "⚡"],
+  [/משכורת|שכר|הכנס|בונוס/, "💰"], [/אחר/, "📦"],
+];
+function catIcon(name, type) {
+  const hit = CAT_ICONS.find(([re]) => re.test(name || ""));
+  return hit ? hit[1] : type === "income" ? "💰" : "🏷️";
+}
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -426,38 +442,29 @@ function render() {
   $("usage-bar").style.width = Math.min(100, pct) + "%";
   $("usage-bar").className = expense > income ? "over" : pct >= 85 ? "warn" : "";
 
-  // Table: fixed incomes first (they land on the reset day), then the period's transactions
-  let bal = 0;
+  // Month's transactions as a list, newest first: icon, category, "נרשם ב־time · date · description", amount
   const today = todayStr();
-  const dateCell = (ds) => { const [y, m, d] = ds.split("-"); return `${d}/${m}/${y.slice(2)}`; };
-  // The monthly income opens the table: the typed-in amount if there is one, otherwise fixed income categories
+  const dotted = (ds) => { const [y, m, d] = ds.split("-"); return `${d}.${m}.${y}`; };
+  const startStr = ymd(start);
+  const items = [];
+  // The monthly income: the typed-in amount if there is one, otherwise fixed income categories
   const incomeRows = isNum(man.income) ? (man.income > 0 ? [{ c: { name: "הכנסה חודשית" }, amount: man.income }] : []) : fixed;
-  const fixedRows = incomeRows.map(({ c, amount }) => {
-    bal += amount;
-    return `<tr class="fixed">
-      <td>${dateCell(ymd(start))}</td>
-      <td class="time"><span class="muted">—</span></td>
-      <td class="desc"><span class="muted">הכנסה חודשית</span></td>
-      <td><span class="tag">${esc(c.name)}</span></td>
-      <td class="num pos">+${fmt(amount)}</td>
-      <td class="num">${fmt(bal)}</td>
-      <td></td>
-    </tr>`;
-  });
-  // Fixed deductions only come off the running total once they are ticked as paid (same as "נשאר החודש")
+  incomeRows.forEach(({ c, amount }) => items.push({ sort: startStr + " 00:00", html: `
+    <div class="tx-item fixed-in">
+      <div class="tx-icon">${catIcon(c.name, "income")}</div>
+      <div class="tx-main"><div class="tx-title">${esc(c.name)}</div><div class="tx-sub">הכנסה חודשית · ${dotted(startStr)}</div></div>
+      <div class="tx-side"><div class="tx-amt pos">+${fmtShort(amount)}</div></div>
+    </div>` }));
+  // Fixed deductions: shown with their status; they only count once ticked as paid
   const paidMap = paidFor(key);
-  const deductRows = deductions.map(({ c, amount }) => {
+  deductions.forEach(({ c, amount }) => {
     const paidNow = !!paidMap[c.id];
-    if (paidNow) bal -= amount;
-    return `<tr class="fixed out ${paidNow ? "" : "pending"}">
-      <td>${dateCell(ymd(start))}</td>
-      <td class="time"><span class="muted">—</span></td>
-      <td class="desc">${paidNow ? `<span class="muted">הורדה חודשית</span> <span class="d-ok">✓ ירד</span>` : `<span class="muted">הורדה חודשית · ממתין</span>`}</td>
-      <td><span class="tag">${esc(c.name)}</span></td>
-      <td class="num neg">−${fmt(amount)}</td>
-      <td class="num ${bal < 0 ? "neg" : ""}">${paidNow ? fmt(bal) : `<span class="muted">—</span>`}</td>
-      <td></td>
-    </tr>`;
+    items.push({ sort: startStr + " 00:01", html: `
+    <div class="tx-item ${paidNow ? "" : "pending"}">
+      <div class="tx-icon">${catIcon(c.name, "expense")}</div>
+      <div class="tx-main"><div class="tx-title">${esc(c.name)}</div><div class="tx-sub">הורדה קבועה · ${paidNow ? `<span class="d-ok">✓ ירד</span>` : "ממתין לסימון"}</div></div>
+      <div class="tx-side"><div class="tx-amt neg">−${fmtShort(amount)}</div></div>
+    </div>` });
   });
   const catOptions = (t) => {
     const names = [...new Set([
@@ -466,35 +473,39 @@ function render() {
     ])];
     return names.map((n) => `<option value="${esc(n)}" ${n === t.category ? "selected" : ""}>${esc(n)}</option>`).join("");
   };
-  const txRows = periodTx.map((t) => {
-    bal += signed(t);
+  periodTx.forEach((t) => {
+    const time = txTime(t);
+    const sort = t.date + " " + (time || "00:02") + " " + String(t.createdAt || 0).padStart(15, "0");
     if (editingTx === t.id) {
-      return `<tr class="editing-row"><td colspan="7">
+      items.push({ sort, html: `
+      <div class="tx-item editing">
         <form class="tx-edit" data-txform="${esc(t.id)}">
           <label>תאריך<input name="date" type="date" required value="${esc(t.date)}" /></label>
-          <label>שעה<input name="time" type="time" value="${esc(txTime(t))}" /></label>
+          <label>שעה<input name="time" type="time" value="${esc(time)}" /></label>
           <label class="grow">תיאור<input name="desc" maxlength="100" value="${esc(t.description || "")}" placeholder="ללא תיאור" /></label>
           <label>קטגוריה<select name="category">${catOptions(t)}</select></label>
           <label>סכום (₪)<input name="amount" type="number" step="0.01" min="0.01" required inputmode="decimal" value="${Number(t.amount)}" /></label>
           <div class="tx-edit-actions">
             <button type="submit" class="btn btn-primary btn-sm">שמירה</button>
             <button type="button" class="btn btn-ghost btn-sm" data-txcancel>ביטול</button>
+            <button type="button" class="btn btn-ghost btn-sm danger" data-del="${esc(t.id)}">מחיקה</button>
           </div>
         </form>
-      </td></tr>`;
+      </div>` });
+      return;
     }
-    return `<tr class="${t.date > today ? "future" : ""}">
-      <td>${dateCell(t.date)}</td>
-      <td class="time">${txTime(t) || `<span class="muted">—</span>`}</td>
-      <td class="desc">${t.description ? esc(t.description) : `<span class="muted">—</span>`}</td>
-      <td><span class="tag">${esc(t.category)}</span></td>
-      <td class="num ${t.type === "income" ? "pos" : "neg"}">${t.type === "income" ? "+" : "−"}${fmt(Number(t.amount))}</td>
-      <td class="num ${bal < 0 ? "neg" : ""}">${fmt(bal)}</td>
-      <td class="row-actions"><button class="icon-btn edit-tx" data-txedit="${esc(t.id)}" title="עריכה" aria-label="עריכת התנועה">✎</button><button class="icon-btn" data-del="${esc(t.id)}" title="מחיקה" aria-label="מחיקה">✕</button></td>
-    </tr>`;
+    const inc = t.type === "income";
+    const sub = [time ? `נרשם ב־${time}` : "", dotted(t.date), t.description ? esc(t.description) : ""].filter(Boolean).join(" · ");
+    items.push({ sort, html: `
+    <div class="tx-item ${t.date > today ? "future" : ""}" data-txedit="${esc(t.id)}" role="button" tabindex="0" aria-label="עריכת ${esc(t.category)} ${fmtShort(Number(t.amount))}">
+      <div class="tx-icon">${catIcon(t.category, t.type)}</div>
+      <div class="tx-main"><div class="tx-title">${esc(t.category)}</div><div class="tx-sub">${sub}</div></div>
+      <div class="tx-side"><div class="tx-amt ${inc ? "pos" : "neg"}">${inc ? "+" : "−"}${fmtShort(Number(t.amount))}</div><div class="tx-hint">✎</div></div>
+    </div>` });
   });
-  $("tx-body").innerHTML = [...fixedRows, ...deductRows, ...txRows].join("");
-  $("empty").classList.toggle("hidden", fixedRows.length + deductRows.length + txRows.length > 0);
+  items.sort((x, y) => (x.sort < y.sort ? 1 : x.sort > y.sort ? -1 : 0));
+  $("tx-body").innerHTML = items.map((x) => x.html).join("");
+  $("empty").classList.toggle("hidden", items.length > 0);
 
   renderCategories(periodTx, key);
 
@@ -695,6 +706,11 @@ function onUser(u) {
   unsub.push(backend.watchSettings(u.uid, (s) => {
     settings = s || {};
     if (!viewInit) { viewInit = true; goToCurrentPeriod(); }
+    if (settings.theme && JSON.stringify(settings.theme) !== JSON.stringify(theme)) {
+      theme = { ...theme, ...settings.theme };
+      try { localStorage.setItem("cashflow-theme", JSON.stringify(theme)); } catch {}
+      applyTheme();
+    }
     render();
   }));
 }
@@ -734,13 +750,14 @@ function wireEvents() {
   };
 
   $("tx-body").onclick = (e) => {
+    if (e.target.closest(".tx-edit") && !e.target.closest("[data-txcancel],[data-del]")) return;
     const ed = e.target.closest("[data-txedit]");
     if (ed) { editingTx = ed.dataset.txedit; render(); document.querySelector(".tx-edit input[name=desc]")?.focus(); return; }
     if (e.target.closest("[data-txcancel]")) { editingTx = null; render(); return; }
     const btn = e.target.closest("[data-del]");
     if (!btn) return;
     confirmClick(btn, "למחוק?", () =>
-      backend.removeTransaction(user.uid, btn.dataset.del).catch((ex) => toast(ex.message, true)));
+      backend.removeTransaction(user.uid, btn.dataset.del).then(() => { editingTx = null; render(); toast("התנועה נמחקה"); }).catch((ex) => toast(ex.message, true)));
   };
 
 
@@ -877,6 +894,9 @@ function wireEvents() {
   });
 
   // Income entered from the month's transactions card is added to the month's income
+  $("tx-body").addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches(".tx-item[data-txedit]")) { e.preventDefault(); e.target.click(); }
+  });
   $("tx-body").addEventListener("submit", async (e) => {
     const f = e.target.closest("[data-txform]");
     if (!f) return;
@@ -1006,6 +1026,65 @@ function wireEvents() {
   };
 }
 
+
+// ---------- Colors (per user) ----------
+const THEME_MODES = [
+  { id: "auto", label: "אוטומטי", sw: "linear-gradient(135deg,#f5f6f8 50%,#0f1218 50%)" },
+  { id: "light", label: "בהיר", sw: "#f5f6f8" },
+  { id: "cream", label: "שמנת", sw: "#f6f1e7" },
+  { id: "dark", label: "כהה", sw: "#181c24" },
+  { id: "night", label: "לילה", sw: "#10213f" },
+];
+const ACCENTS = [
+  { id: "blue", label: "כחול", c: "#2563eb" }, { id: "sky", label: "תכלת", c: "#0284c7" }, { id: "teal", label: "טורקיז", c: "#0d9488" },
+  { id: "green", label: "ירוק", c: "#16a34a" }, { id: "lime", label: "ליים", c: "#65a30d" }, { id: "amber", label: "צהוב", c: "#d97706" },
+  { id: "orange", label: "כתום", c: "#ea580c" }, { id: "red", label: "אדום", c: "#dc2626" }, { id: "pink", label: "ורוד", c: "#db2777" },
+  { id: "purple", label: "סגול", c: "#9333ea" }, { id: "indigo", label: "אינדיגו", c: "#4f46e5" }, { id: "slate", label: "אפור", c: "#475569" },
+];
+let theme = { mode: "auto", accent: "blue" };
+try { theme = { ...theme, ...JSON.parse(localStorage.getItem("cashflow-theme") || "{}") }; } catch {}
+const darkMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+function applyTheme() {
+  const root = document.documentElement;
+  const mode = theme.mode === "auto" ? (darkMq && darkMq.matches ? "dark" : "light") : theme.mode;
+  root.dataset.theme = mode;
+  const acc = ACCENTS.find((a) => a.id === theme.accent);
+  if (acc) { root.style.setProperty("--primary", acc.c); root.style.setProperty("--bal", acc.c); }
+  else { root.style.removeProperty("--primary"); root.style.removeProperty("--bal"); }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = getComputedStyle(root).getPropertyValue("--bg").trim();
+  renderThemePicker();
+}
+function renderThemePicker() {
+  const modes = $("theme-modes"), accents = $("theme-accents");
+  if (!modes) return;
+  modes.innerHTML = THEME_MODES.map((m) => `<button type="button" class="mode-btn ${theme.mode === m.id ? "on" : ""}" data-mode="${m.id}" aria-pressed="${theme.mode === m.id}">
+      <span class="mode-sw" style="background:${m.sw}"></span>${m.label}</button>`).join("");
+  accents.innerHTML = ACCENTS.map((a) => `<button type="button" class="acc-btn ${theme.accent === a.id ? "on" : ""}" data-accent="${a.id}" style="--c:${a.c}" title="${a.label}" aria-label="${a.label}" aria-pressed="${theme.accent === a.id}"></button>`).join("");
+}
+function setTheme(patch) {
+  theme = { ...theme, ...patch };
+  try { localStorage.setItem("cashflow-theme", JSON.stringify(theme)); } catch {}
+  applyTheme();
+  // Saved to the account too, so the same colors follow the user to every device
+  if (user && backend) backend.saveSettings(user.uid, { theme }).catch(() => {});
+}
+function wireTheme() {
+  const btn = $("theme-btn"), pop = $("theme-pop");
+  const close = () => { pop.classList.add("hidden"); btn.setAttribute("aria-expanded", "false"); };
+  btn.onclick = (e) => { e.stopPropagation(); const open = pop.classList.toggle("hidden") === false; btn.setAttribute("aria-expanded", String(open)); };
+  pop.onclick = (e) => {
+    e.stopPropagation();
+    const m = e.target.closest("[data-mode]"); if (m) setTheme({ mode: m.dataset.mode });
+    const a = e.target.closest("[data-accent]"); if (a) setTheme({ accent: a.dataset.accent });
+  };
+  document.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+  if (darkMq && darkMq.addEventListener) darkMq.addEventListener("change", () => theme.mode === "auto" && applyTheme());
+}
+applyTheme();
+
 // ---------- Boot ----------
 (async () => {
   try {
@@ -1016,6 +1095,7 @@ function wireEvents() {
   }
   if (DEMO) $("demo-banner").classList.remove("hidden");
   wireEvents();
+  wireTheme();
   let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => user && render(), 150); });
   backend.onAuth(onUser);
 })();
