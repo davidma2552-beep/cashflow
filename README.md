@@ -80,3 +80,6 @@ python3 -m http.server 8000
 ## מצב נוכחי
 - `firebase-config.js` מחובר לפרויקט `cashflow-104cb`.
 - `firebase-config.demo.js` משמש רק לתצוגה המקדימה ב-claude.ai, שנשארת במצב הדגמה.
+
+## עדכון גרסה
+בכל שינוי ב-app.js או ב-style.css מעלים את המספר `?v=` בשתי השורות ב-index.html, כדי שהדפדפן יטען את הקבצים החדשים ולא גרסה ישנה מהמטמון.
