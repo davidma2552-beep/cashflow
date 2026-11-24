@@ -285,6 +285,8 @@ let drawerOpen = false;
 let editingTx = null;
 try { drawerOpen = localStorage.getItem("cashflow-drawer") === "1"; } catch {}
 const paidFor = (key) => (settings.paid || {})[key] || {};
+// When a deduction was ticked as paid: "YYYY-MM-DD HH:MM" (older ticks were just `true`)
+const paidAt = (key, id) => { const v = paidFor(key)[id]; return typeof v === "string" ? v : null; };
 
 let editingDeduct = null;
 // Optional day of the month a fixed deduction comes out (1-31)
@@ -579,10 +581,14 @@ function render() {
   deductions.forEach(({ c, amount }) => {
     const paidNow = !!paidMap[c.id];
     const on = deductDate(c, key); // the day it comes out, if the user set one
-    items.push({ sort: (on || startStr) + " 00:01", html: `
+    // Without a day: once ticked, it sits in the list on the date and time it was marked as paid
+    const ticked = !on && paidNow ? paidAt(key, c.id) : null;
+    const tickedLabel = ticked ? ` · ${ticked.length > 10 ? `נרשם ב־${ticked.slice(11)} · ` : "סומן ב־"}${dotted(ticked.slice(0, 10))}` : "";
+    const tickedSort = ticked ? (ticked.length > 10 ? ticked : ticked + " 00:01") : null;
+    items.push({ sort: tickedSort || ((on || startStr) + " 00:01"), html: `
     <div class="tx-item ${paidNow ? "" : "pending"}">
       <div class="tx-icon">${catIcon(c)}</div>
-      <div class="tx-main"><div class="tx-title">${esc(c.name)}</div><div class="tx-sub">הורדה קבועה${on ? ` · יורד ב-${on.split("-").slice(1).reverse().map(Number).join(".")}` : ""} · ${paidNow ? `<span class="d-ok">✓ ירד</span>` : "ממתין לסימון"}</div></div>
+      <div class="tx-main"><div class="tx-title">${esc(c.name)}</div><div class="tx-sub">הורדה קבועה${on ? ` · יורד ב-${on.split("-").slice(1).reverse().map(Number).join(".")}` : ""}${tickedLabel} · ${paidNow ? `<span class="d-ok">✓ ירד</span>` : "ממתין לסימון"}</div></div>
       <div class="tx-side"><div class="tx-amt neg">−${fmtShort(amount)}</div></div>
     </div>` });
   });
@@ -1241,7 +1247,15 @@ function wireEvents() {
     if (!box) return;
     const all = JSON.parse(JSON.stringify(settings.paid || {}));
     const key = viewKey();
-    all[key] = { ...(all[key] || {}), [box.dataset.paid]: box.checked };
+    // Remember when it was ticked, so a deduction without a day shows up in the list on that date.
+    // Ticking in a month that is over (or not started) dates it at that month's end (or start).
+    let when = false;
+    if (box.checked) {
+      const [s, e] = rangeOfKey(key);
+      const today = todayStr();
+      when = today < ymd(s) ? ymd(s) : today > ymd(e) ? ymd(e) : today + " " + nowTime();
+    }
+    all[key] = { ...(all[key] || {}), [box.dataset.paid]: when };
     try { await backend.saveSettings(user.uid, { paid: all }); }
     catch (ex) { toast(ex.message, true); box.checked = !box.checked; }
   });
