@@ -594,6 +594,8 @@ function render() {
   // Fixed deductions: shown with their status; they only count once ticked as paid
   deductions.forEach(({ c, amount }) => {
     const paidNow = isPaid(key, c);
+    // Only deductions that have come out appear in the month's transactions
+    if (!paidNow) return;
     const autoNow = isAutoPaid(key, c);
     const on = deductDate(c, key); // the day it comes out, if the user set one
     // Without a day: once ticked, it sits in the list on the date and time it was marked as paid
