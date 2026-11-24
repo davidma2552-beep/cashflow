@@ -603,3 +603,9 @@ body.sheet-open { overflow: hidden; }
 .save-text { font-size: .88rem; color: var(--muted); line-height: 1.5; }
 .save-amt { font-size: .82rem; font-weight: 600; color: var(--pos); margin-top: .3rem; }
 .save-note { font-size: .78rem; color: var(--muted); margin: .2rem 0 0; }
+
+/* Optional day a fixed deduction comes out */
+.d-amt { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+.d-day { font-size: .72rem; color: var(--muted); font-weight: 400; text-decoration: none; }
+.d-row.done .d-day { text-decoration: none; }
+.drawer-add input[name=day], .d-edit input[name=day] { font-size: .85rem; }

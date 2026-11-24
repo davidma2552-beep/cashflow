@@ -287,6 +287,18 @@ try { drawerOpen = localStorage.getItem("cashflow-drawer") === "1"; } catch {}
 const paidFor = (key) => (settings.paid || {})[key] || {};
 
 let editingDeduct = null;
+// Optional day of the month a fixed deduction comes out (1-31)
+const dayOk = (v) => { const n = parseInt(v, 10); return n >= 1 && n <= 31 ? n : null; };
+// The actual date of that day inside the viewed period (the period may span two calendar months)
+function deductDate(c, key) {
+  const day = dayOk(c.day);
+  if (!day) return null;
+  const [start] = rangeOfKey(key);
+  let d = new Date(start.getFullYear(), start.getMonth(), Math.min(day, daysIn(start.getFullYear(), start.getMonth())));
+  if (d < start) { const n = new Date(start.getFullYear(), start.getMonth() + 1, 1); d = new Date(n.getFullYear(), n.getMonth(), Math.min(day, daysIn(n.getFullYear(), n.getMonth()))); }
+  return ymd(d);
+}
+const dayLabel = (c) => (dayOk(c.day) ? `יורד ב-${dayOk(c.day)} לחודש` : "");
 function drawerHTML(key) {
   const items = getCategories().filter((c) => isFixed(c) && activeIn(c, key));
   const paid = paidFor(key);
@@ -300,6 +312,7 @@ function drawerHTML(key) {
       return `<form class="d-edit" data-dform="${id}">
         <input name="name" maxlength="40" required value="${esc(c.name)}" aria-label="שם ההורדה" />
         <input name="amount" type="number" min="0" step="0.01" inputmode="decimal" value="${amt || ""}" placeholder="סכום ₪" aria-label="סכום חודשי" />
+        <input name="day" type="number" min="1" max="31" step="1" inputmode="numeric" value="${dayOk(c.day) || ""}" placeholder="יום ההורדה בחודש (לא חובה)" aria-label="יום ההורדה בחודש, לא חובה" />
         ${iconPicker(c)}
         <div class="d-edit-actions">
           <button type="submit" class="btn btn-primary btn-sm">שמירה</button>
@@ -314,7 +327,7 @@ function drawerHTML(key) {
         <input type="checkbox" data-paid="${id}" ${ok ? "checked" : ""} aria-label="${esc(c.name)} ירד" />
         <span class="d-name"><span class="cat-ico" aria-hidden="true">${catIcon(c)}</span>${esc(c.name)}${ok ? ` <span class="d-ok">✓ ירד</span>` : ""}</span>
       </label>
-      <span class="d-amt">${amt > 0 ? fmt(amt) : `<span class="muted">ללא סכום</span>`}</span>
+      <span class="d-amt">${amt > 0 ? fmt(amt) : `<span class="muted">ללא סכום</span>`}${dayLabel(c) ? `<small class="d-day">${dayLabel(c)}</small>` : ""}</span>
       <button type="button" class="icon-btn d-edit-btn" data-dedit="${id}" title="עריכה או מחיקה" aria-label="עריכת ${esc(c.name)}">✎</button>
     </div>`;
   }).join("");
@@ -328,6 +341,7 @@ function drawerHTML(key) {
         <input name="amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="סכום ₪" aria-label="סכום חודשי" />
         <button type="submit" class="btn btn-primary btn-sm">+ הוספה</button>
       </div>
+      <input name="day" type="number" min="1" max="31" step="1" inputmode="numeric" placeholder="יום ההורדה בחודש (לא חובה)" aria-label="יום ההורדה בחודש, לא חובה" />
     </form>
     <p class="muted hint">הסכומים קבועים לכל החודשים עד שתשנו אותם (✎). הסימון "ירד" מתאפס ביום האיפוס.</p>
   </div>`;
@@ -479,6 +493,7 @@ const saveCategories = (cats) =>
       const out = { id: c.id, name: c.name, kind, budget: kind === "expense" ? Number(c.budget) || 0 : 0, amounts: kind === "expense" ? [] : (c.amounts || []) };
       if (c.deletedFrom) out.deletedFrom = c.deletedFrom;
       if (c.icon) out.icon = c.icon;
+      if (kind === "fixed" && dayOk(c.day)) out.day = dayOk(c.day);
       return out;
     }),
   });
@@ -559,10 +574,11 @@ function render() {
   const paidMap = paidFor(key);
   deductions.forEach(({ c, amount }) => {
     const paidNow = !!paidMap[c.id];
-    items.push({ sort: startStr + " 00:01", html: `
+    const on = deductDate(c, key); // the day it comes out, if the user set one
+    items.push({ sort: (on || startStr) + " 00:01", html: `
     <div class="tx-item ${paidNow ? "" : "pending"}">
       <div class="tx-icon">${catIcon(c)}</div>
-      <div class="tx-main"><div class="tx-title">${esc(c.name)}</div><div class="tx-sub">הורדה קבועה · ${paidNow ? `<span class="d-ok">✓ ירד</span>` : "ממתין לסימון"}</div></div>
+      <div class="tx-main"><div class="tx-title">${esc(c.name)}</div><div class="tx-sub">הורדה קבועה${on ? ` · יורד ב-${on.split("-").slice(1).reverse().map(Number).join(".")}` : ""} · ${paidNow ? `<span class="d-ok">✓ ירד</span>` : "ממתין לסימון"}</div></div>
       <div class="tx-side"><div class="tx-amt neg">−${fmtShort(amount)}</div></div>
     </div>` });
   });
@@ -1233,10 +1249,11 @@ function wireEvents() {
       const name = df.name.value.trim();
       const amount = Math.max(0, parseFloat(df.amount.value) || 0);
       if (!name) return;
+      if (df.day.value && !dayOk(df.day.value)) { toast("יום ההורדה צריך להיות בין 1 ל-31", true); return; }
       if (nameTaken(name, id, "fixed")) { toast("כבר יש הורדה בשם הזה", true); return; }
       const old = getCategories().find((c) => c.id === id);
       try {
-        await saveCategories(getCategories().map((c) => (c.id === id ? { ...c, name, icon: df.icon ? df.icon.value : c.icon, amounts: setFixedAmount(c, amount) } : c)));
+        await saveCategories(getCategories().map((c) => (c.id === id ? { ...c, name, icon: df.icon ? df.icon.value : c.icon, amounts: setFixedAmount(c, amount), day: dayOk(df.day.value) } : c)));
         editingDeduct = null; render();
         toast("נשמר");
       } catch (ex) { toast(ex.message, true); }
@@ -1248,8 +1265,9 @@ function wireEvents() {
     const name = f.name.value.trim();
     const amount = Math.max(0, parseFloat(f.amount.value) || 0);
     if (!name) return;
+    if (f.day.value && !dayOk(f.day.value)) { toast("יום ההורדה צריך להיות בין 1 ל-31", true); return; }
     if (nameTaken(name, null, "fixed")) { toast("כבר יש הורדה בשם הזה", true); return; }
-    const cat = { id: newId(), name, kind: "fixed", budget: 0, amounts: amount > 0 ? [{ from: effectiveDate(viewKey()), amount }] : [] };
+    const cat = { id: newId(), name, kind: "fixed", budget: 0, amounts: amount > 0 ? [{ from: effectiveDate(viewKey()), amount }] : [], day: dayOk(f.day.value) };
     try {
       await saveCategories([...getCategories(), cat]);
       toast(`"${name}" נוספה להורדות הקבועות`);
