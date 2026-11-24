@@ -287,6 +287,15 @@ try { drawerOpen = localStorage.getItem("cashflow-drawer") === "1"; } catch {}
 const paidFor = (key) => (settings.paid || {})[key] || {};
 // When a deduction was ticked as paid: "YYYY-MM-DD HH:MM" (older ticks were just `true`)
 const paidAt = (key, id) => { const v = paidFor(key)[id]; return typeof v === "string" ? v : null; };
+// Auto-marking (a switch in the deductions list): a deduction with a day counts as paid once that day has come,
+// unless the user unticked it by hand. Nothing is written; it's worked out each time.
+const autoPaidOn = () => !!settings.autoPaid;
+function isAutoPaid(key, c) {
+  if (!autoPaidOn() || paidFor(key)[c.id] !== undefined) return false;
+  const on = deductDate(c, key);
+  return !!on && on <= todayStr();
+}
+const isPaid = (key, c) => { const v = paidFor(key)[c.id]; return v === false ? false : !!v || isAutoPaid(key, c); };
 
 let editingDeduct = null;
 // Optional day of the month a fixed deduction comes out (1-31)
@@ -307,10 +316,9 @@ function drawerHTML(key) {
     .map((c, i) => ({ c, i, on: deductDate(c, key) }))
     .sort((a, b) => (a.on && b.on ? a.on.localeCompare(b.on) || a.i - b.i : a.on ? -1 : b.on ? 1 : a.i - b.i))
     .map((x) => x.c);
-  const paid = paidFor(key);
-  const done = items.filter((c) => paid[c.id]);
+  const done = items.filter((c) => isPaid(key, c));
   const total = items.reduce((s, c) => s + fixedAmount(c, key), 0);
-  const pending = items.filter((c) => !paid[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0);
+  const pending = items.filter((c) => !isPaid(key, c)).reduce((s, c) => s + fixedAmount(c, key), 0);
   const rows = items.map((c) => {
     const id = esc(c.id);
     const amt = fixedAmount(c, key);
@@ -327,18 +335,24 @@ function drawerHTML(key) {
         </div>
       </form>`;
     }
-    const ok = !!paid[c.id];
+    const ok = isPaid(key, c);
+    const auto = isAutoPaid(key, c);
     return `<div class="d-row ${ok ? "done" : ""}">
       <label class="d-check">
         <input type="checkbox" data-paid="${id}" ${ok ? "checked" : ""} aria-label="${esc(c.name)} ירד" />
-        <span class="d-name"><span class="cat-ico" aria-hidden="true">${catIcon(c)}</span>${esc(c.name)}${ok ? ` <span class="d-ok">✓ ירד</span>` : ""}</span>
+        <span class="d-name"><span class="cat-ico" aria-hidden="true">${catIcon(c)}</span>${esc(c.name)}${ok ? ` <span class="d-ok">✓ ירד${auto ? " אוטומטית" : ""}</span>` : ""}</span>
       </label>
-      <span class="d-amt">${amt > 0 ? fmt(amt) : `<span class="muted">ללא סכום</span>`}${dayLabel(c) ? `<small class="d-day">${dayLabel(c)}</small>` : ""}</span>
+      <span class="d-amt"><span class="d-amt-v">${amt > 0 ? fmt(amt) : `<span class="muted">ללא סכום</span>`}</span>${dayLabel(c) ? `<small class="d-day">${dayLabel(c)}</small>` : ""}</span>
       <button type="button" class="icon-btn d-edit-btn" data-dedit="${id}" title="עריכה או מחיקה" aria-label="עריכת ${esc(c.name)}">✎</button>
     </div>`;
   }).join("");
   return `<div class="drawer">
     <div class="drawer-sum muted">${items.length ? `ירדו ${done.length} מתוך ${items.length}${pending > 0 ? ` · עוד צפוי לרדת ${fmt(pending)}` : ""}` : `<span class="d-hint">${DEDUCT_HINT}</span>`}</div>
+    <label class="auto-switch">
+      <span class="auto-text"><b>סימון אוטומטי</b><small>הורדות עם תאריך יסומנו "ירד" לבד כשמגיע היום שלהן</small></span>
+      <input type="checkbox" role="switch" data-autopaid ${autoPaidOn() ? "checked" : ""} aria-label="סימון אוטומטי של הורדות עם תאריך" />
+      <span class="switch" aria-hidden="true"></span>
+    </label>
     <div class="d-list">${rows}</div>
     ${items.length ? `<div class="d-total"><span>סה״כ</span><b>${fmt(total)}</b></div>` : ""}
     <form id="drawer-add" class="drawer-add">
@@ -362,7 +376,7 @@ function periodTotals(key, periodTx) {
     incomeTx: sum(periodTx.filter((t) => t.type === "income")),
     deduct: fixedItems(key, "fixed").reduce((s, x) => s + x.amount, 0),
     // What actually went out: deductions ticked as paid plus every expense entered
-    paidDeduct: getCategories().filter((c) => isFixed(c) && activeIn(c, key) && paidFor(key)[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0),
+    paidDeduct: getCategories().filter((c) => isFixed(c) && activeIn(c, key) && isPaid(key, c)).reduce((s, c) => s + fixedAmount(c, key), 0),
     personal: sum(periodTx.filter((t) => t.type === "expense")),
   };
   auto.expense = auto.paidDeduct + auto.personal;
@@ -529,11 +543,11 @@ function render() {
     : "";
   $("stat-income").innerHTML = statHTML("income", income, tot.auto.baseIncome, isNum(man.income), incomeBreakdown + afterDeduct, tot.baseIncome);
   const fixedCats = getCategories().filter((c) => isFixed(c) && activeIn(c, key));
-  const paidCount = fixedCats.filter((c) => paidFor(key)[c.id]).length;
+  const paidCount = fixedCats.filter((c) => isPaid(key, c)).length;
   const drawerBtn = `<button type="button" class="drawer-toggle ${drawerOpen ? "open" : ""}" data-drawer aria-expanded="${drawerOpen}">
       ${fixedCats.length ? `סומנו ${paidCount}/${fixedCats.length} · ` : ""}${drawerOpen ? "סגירת הרשימה ▴" : fixedCats.length ? "פתיחת הרשימה ▾" : "+ הוספת הורדות ▾"}</button>`;
   // How much of the list has come out so far (the ticked items)
-  const paidSum = fixedCats.filter((c) => paidFor(key)[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0);
+  const paidSum = fixedCats.filter((c) => isPaid(key, c)).reduce((s, c) => s + fixedAmount(c, key), 0);
   const paidPct = deduct > 0 ? Math.min(100, (paidSum / deduct) * 100) : 0;
   $("stat-deduct").innerHTML = `<div class="stat-label">${STAT_LABELS.deduct}</div>
     <button class="stat-value as-btn total" data-drawer title="פתיחת הרשימה">${fmt(deduct)}</button>
@@ -577,9 +591,9 @@ function render() {
       <div class="tx-side"><div class="tx-amt pos">+${fmtShort(amount)}</div></div>
     </div>` }));
   // Fixed deductions: shown with their status; they only count once ticked as paid
-  const paidMap = paidFor(key);
   deductions.forEach(({ c, amount }) => {
-    const paidNow = !!paidMap[c.id];
+    const paidNow = isPaid(key, c);
+    const autoNow = isAutoPaid(key, c);
     const on = deductDate(c, key); // the day it comes out, if the user set one
     // Without a day: once ticked, it sits in the list on the date and time it was marked as paid
     const ticked = !on && paidNow ? paidAt(key, c.id) : null;
@@ -588,7 +602,7 @@ function render() {
     items.push({ sort: tickedSort || ((on || startStr) + " 00:01"), html: `
     <div class="tx-item ${paidNow ? "" : "pending"}">
       <div class="tx-icon">${catIcon(c)}</div>
-      <div class="tx-main"><div class="tx-title">${esc(c.name)}</div><div class="tx-sub">הורדה קבועה${on ? ` · יורד ב-${on.split("-").slice(1).reverse().map(Number).join(".")}` : ""}${tickedLabel} · ${paidNow ? `<span class="d-ok">✓ ירד</span>` : "ממתין לסימון"}</div></div>
+      <div class="tx-main"><div class="tx-title">${esc(c.name)}</div><div class="tx-sub">הורדה קבועה${on ? ` · יורד ב-${on.split("-").slice(1).reverse().map(Number).join(".")}` : ""}${tickedLabel} · ${paidNow ? `<span class="d-ok">✓ ירד${autoNow ? " אוטומטית" : ""}</span>` : "ממתין לסימון"}</div></div>
       <div class="tx-side"><div class="tx-amt neg">−${fmtShort(amount)}</div></div>
     </div>` });
   });
@@ -649,7 +663,7 @@ function renderBreakdown(periodTx, key) {
   periodTx.filter((t) => t.type === "expense").forEach((t) => { by[t.category] = (by[t.category] || 0) + Number(t.amount); });
   const rows = Object.entries(by).map(([name, amount]) => ({ name, icon: iconForName(name), amount }));
   // Fixed deductions that have come out this month, as one row
-  const paidDeduct = getCategories().filter((c) => isFixed(c) && activeIn(c, key) && paidFor(key)[c.id]).reduce((s, c) => s + fixedAmount(c, key), 0);
+  const paidDeduct = getCategories().filter((c) => isFixed(c) && activeIn(c, key) && isPaid(key, c)).reduce((s, c) => s + fixedAmount(c, key), 0);
   if (paidDeduct > 0) rows.push({ name: "הורדות קבועות", icon: "🔁", amount: paidDeduct });
   rows.sort((a, b) => b.amount - a.amount);
   const total = rows.reduce((s, r) => s + r.amount, 0);
@@ -1243,6 +1257,14 @@ function wireEvents() {
     render();
   });
   stats.addEventListener("change", async (e) => {
+    const sw = e.target.closest("[data-autopaid]");
+    if (sw) {
+      try {
+        await backend.saveSettings(user.uid, { autoPaid: sw.checked });
+        toast(sw.checked ? "סימון אוטומטי פועל: הורדות עם תאריך יסומנו לבד ביום שלהן" : "סימון אוטומטי כבוי");
+      } catch (ex) { toast(ex.message, true); sw.checked = !sw.checked; }
+      return;
+    }
     const box = e.target.closest("[data-paid]");
     if (!box) return;
     const all = JSON.parse(JSON.stringify(settings.paid || {}));

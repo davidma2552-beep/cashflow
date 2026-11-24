@@ -202,7 +202,7 @@ tr.fixed td { background: color-mix(in srgb, var(--pos) 6%, transparent); }
 .d-edit-btn { font-size: .9rem; }
 .d-edit-btn:hover { color: var(--primary) !important; }
 .d-row.done .d-name { color: var(--muted); }
-.d-row.done .d-amt { color: var(--muted); text-decoration: line-through; }
+.d-row.done .d-amt-v { color: var(--muted); text-decoration: line-through; }
 .d-edit { display: flex; flex-direction: column; gap: .35rem; padding: .5rem; margin: .3rem 0; border: 1px solid var(--primary); border-radius: 10px; }
 .d-edit input { padding: .35rem .5rem; font-size: .9rem; background: var(--card); }
 .d-edit-actions { display: flex; gap: .35rem; flex-wrap: wrap; }
@@ -609,3 +609,17 @@ body.sheet-open { overflow: hidden; }
 .d-day { font-size: .72rem; color: var(--muted); font-weight: 400; text-decoration: none; }
 .d-row.done .d-day { text-decoration: none; }
 .drawer-add input[name=day], .d-edit input[name=day] { font-size: .85rem; }
+
+/* On/off switch for auto-marking deductions */
+.auto-switch {
+  display: flex; flex-direction: row; align-items: center; gap: .6rem; margin: .1rem 0 .5rem; padding: .55rem .65rem;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--tile, var(--bg)); color: var(--text); cursor: pointer; font-size: .88rem;
+}
+.auto-text { display: flex; flex-direction: column; gap: .1rem; flex: 1; min-width: 0; }
+.auto-text small { font-size: .74rem; color: var(--muted); line-height: 1.35; }
+.auto-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch { position: relative; flex: none; width: 2.6rem; height: 1.5rem; border-radius: 999px; background: color-mix(in srgb, var(--muted) 45%, transparent); transition: background .2s; }
+.switch::after { content: ""; position: absolute; top: .18rem; right: .18rem; width: 1.14rem; height: 1.14rem; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s; }
+.auto-switch input:checked + .switch { background: var(--pos); }
+.auto-switch input:checked + .switch::after { transform: translateX(-1.1rem); }
+.auto-switch input:focus-visible + .switch { outline: 2px solid var(--primary); outline-offset: 2px; }
