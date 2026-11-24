@@ -300,7 +300,11 @@ function deductDate(c, key) {
 }
 const dayLabel = (c) => (dayOk(c.day) ? `יורד ב-${dayOk(c.day)} לחודש` : "");
 function drawerHTML(key) {
-  const items = getCategories().filter((c) => isFixed(c) && activeIn(c, key));
+  // Deductions with a day come first, in the order they come out during the month; those without a day go last
+  const items = getCategories().filter((c) => isFixed(c) && activeIn(c, key))
+    .map((c, i) => ({ c, i, on: deductDate(c, key) }))
+    .sort((a, b) => (a.on && b.on ? a.on.localeCompare(b.on) || a.i - b.i : a.on ? -1 : b.on ? 1 : a.i - b.i))
+    .map((x) => x.c);
   const paid = paidFor(key);
   const done = items.filter((c) => paid[c.id]);
   const total = items.reduce((s, c) => s + fixedAmount(c, key), 0);
