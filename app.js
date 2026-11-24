@@ -291,7 +291,8 @@ const paidAt = (key, id) => { const v = paidFor(key)[id]; return typeof v === "s
 // unless the user unticked it by hand. Nothing is written; it's worked out each time.
 const autoPaidOn = () => !!settings.autoPaid;
 function isAutoPaid(key, c) {
-  if (!autoPaidOn() || paidFor(key)[c.id] !== undefined) return false;
+  const v = paidFor(key)[c.id];
+  if (!autoPaidOn() || (v !== undefined && v !== null)) return false;
   const on = deductDate(c, key);
   return !!on && on <= todayStr();
 }
@@ -1260,7 +1261,16 @@ function wireEvents() {
     const sw = e.target.closest("[data-autopaid]");
     if (sw) {
       try {
-        await backend.saveSettings(user.uid, { autoPaid: sw.checked });
+        const patch = { autoPaid: sw.checked };
+        if (sw.checked) {
+          // Turning it on starts fresh: old "unticked by hand" marks on deductions with a day are cleared,
+          // so they follow their day. Unticking one after the switch is on is still remembered.
+          const withDay = new Set(getCategories().filter((c) => isFixed(c) && dayOk(c.day)).map((c) => c.id));
+          const all = JSON.parse(JSON.stringify(settings.paid || {}));
+          for (const k of Object.keys(all)) for (const id of Object.keys(all[k] || {})) if (all[k][id] === false && withDay.has(id)) all[k][id] = null; // null = "not decided by hand"
+          patch.paid = all;
+        }
+        await backend.saveSettings(user.uid, patch);
         toast(sw.checked ? "סימון אוטומטי פועל: הורדות עם תאריך יסומנו לבד ביום שלהן" : "סימון אוטומטי כבוי");
       } catch (ex) { toast(ex.message, true); sw.checked = !sw.checked; }
       return;
