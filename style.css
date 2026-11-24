@@ -580,3 +580,26 @@ body.sheet-open { overflow: hidden; }
 .preset-btnsw { position: absolute; bottom: 3px; left: 25%; right: 25%; height: 4px; border-radius: 4px; }
 .theme-pop { max-height: min(78vh, 40rem); overflow-y: auto; width: 21rem; }
 @media (max-width: 520px) { .theme-presets { grid-template-columns: repeat(5, 1fr); } }
+
+/* ---------- Where can I save? ---------- */
+.save-btn {
+  width: 100%; margin-top: 1rem; background: color-mix(in srgb, var(--primary) 14%, var(--card)); color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border)); font-weight: 600; padding: .7rem 1rem;
+}
+.save-btn:hover { background: color-mix(in srgb, var(--primary) 22%, var(--card)); }
+.save-ready { background: var(--primary); color: var(--primary-ink); font-size: .72rem; padding: .05rem .5rem; border-radius: 999px; margin-inline-start: .35rem; }
+.save-panel { margin-top: .8rem; display: flex; flex-direction: column; gap: .6rem; animation: drawer-in .18s ease-out; }
+.save-sum {
+  padding: .7rem .85rem; border-radius: 12px; font-size: .95rem;
+  background: color-mix(in srgb, var(--pos) 14%, var(--card)); border: 1px solid color-mix(in srgb, var(--pos) 40%, var(--border));
+}
+.save-sum b { color: var(--pos); }
+.save-list { display: flex; flex-direction: column; gap: .5rem; }
+.save-tip { padding: .7rem .85rem; border-radius: 12px; background: var(--tile, var(--bg)); border: 1px solid var(--border); border-inline-start-width: 4px; }
+.save-tip.warn { border-inline-start-color: var(--neg); }
+.save-tip.idea { border-inline-start-color: var(--primary); }
+.save-tip.good { border-inline-start-color: var(--pos); }
+.save-title { font-weight: 700; margin-bottom: .2rem; }
+.save-text { font-size: .88rem; color: var(--muted); line-height: 1.5; }
+.save-amt { font-size: .82rem; font-weight: 600; color: var(--pos); margin-top: .3rem; }
+.save-note { font-size: .78rem; color: var(--muted); margin: .2rem 0 0; }

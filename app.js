@@ -612,6 +612,7 @@ function render() {
   const unplanned = periodTx.filter((t) => t.category === UNPLANNED && t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   $("unplanned-sum").textContent = unplanned > 0 ? `החודש: ${fmt(unplanned)}` : "";
   renderBreakdown(periodTx, key);
+  renderSavings(sorted, key);
   renderCompare(sorted, key);
   renderChart(sorted);
 }
@@ -639,6 +640,140 @@ function renderBreakdown(periodTx, key) {
   }).join("");
 }
 
+// ----- Where can I save? Advice only: it reads the month's numbers and never changes anything -----
+let savingsOpen = false;
+const fmtR = (n) => fmtShort(Math.round(n)); // whole shekels in advice
+function savingsTips(sorted, key) {
+  const tips = [];
+  const sum = (l) => l.reduce((s, t) => s + Number(t.amount), 0);
+  const round10 = (n) => Math.max(10, Math.round(n / 10) * 10);
+  const periodTx = sorted.filter((t) => periodOf(t.date) === key);
+  const exp = periodTx.filter((t) => t.type === "expense");
+  const byCat = {};
+  exp.forEach((t) => (byCat[t.category] ||= []).push(t));
+  const cats = getCategories().filter((c) => activeIn(c, key));
+  const today = todayStr();
+  const [start, end] = rangeOfKey(key);
+  const inProgress = periodOf(today) === key;
+  const daysLeft = inProgress ? Math.round((end - new Date(today)) / 86400000) + 1 : 0;
+
+  // Up to three previous months, for "more than usual"
+  const [y, m] = key.split("-").map(Number);
+  const prevMonths = [1, 2, 3].map((i) => { const d = new Date(y, m - 1 - i, 1); return monthKey(d.getFullYear(), d.getMonth()); })
+    .map((k) => { const o = {}; sorted.filter((t) => t.type === "expense" && periodOf(t.date) === k).forEach((t) => { o[t.category] = (o[t.category] || 0) + Number(t.amount); }); return o; })
+    .filter((o) => Object.keys(o).length);
+
+  const perCat = {}; // the biggest saving per category, so nothing is counted twice
+  const add = (tip) => {
+    tips.push(tip);
+    if (tip.save > 0 && tip.cat) perCat[tip.cat] = Math.max(perCat[tip.cat] || 0, tip.save);
+  };
+
+  // 1. Personal-expense categories: over budget, close to it, above usual, no budget yet
+  cats.filter((c) => kindOf(c) === "expense").forEach((c) => {
+    const spent = sum(byCat[c.name] || []);
+    const budget = Number(c.budget) || 0;
+    const icon = catIcon(c);
+    if (budget > 0 && spent > budget) {
+      add({ kind: "warn", cat: c.name, save: spent - budget, title: `${icon} ${c.name}: חריגה של ${fmtR(spent - budget)}`,
+        text: `הוצאתם ${fmtR(spent)} מתוך תקציב של ${fmtR(budget)}. עמידה בתקציב בחודש הבא תחסוך ${fmtR(spent - budget)}.` });
+    } else if (budget > 0 && inProgress && spent >= budget * 0.85) {
+      add({ kind: "warn", cat: c.name, save: 0, title: `${icon} ${c.name}: קרוב לסוף התקציב`,
+        text: `נשארו ${fmtR(budget - spent)} ל${daysLeft} הימים שנותרו בחודש. כדאי להאט כאן עד יום האיפוס.` });
+    }
+    if (prevMonths.length && spent > 0) {
+      const avg = prevMonths.reduce((s, o) => s + (o[c.name] || 0), 0) / prevMonths.length;
+      if (avg > 0 && spent > avg * 1.15 && spent - avg >= 50) {
+        add({ kind: "idea", cat: c.name, save: spent - avg, title: `${icon} ${c.name}: יותר מהרגיל`,
+          text: `בממוצע אתם מוציאים כאן ${fmtR(avg)} בחודש, והחודש ${fmtR(spent)}. חזרה לממוצע תחסוך כ-${fmtR(spent - avg)}.` });
+      }
+    }
+    if (!budget && spent >= 300) {
+      const target = round10(spent * 0.9);
+      add({ kind: "idea", cat: c.name, save: spent - target, title: `${icon} ${c.name}: אין תקציב`,
+        text: `הוצאתם כאן ${fmtR(spent)} בלי תקציב. קביעת תקציב של כ-${fmtR(target)} (לוחצים ✎ בכרטיס) יכולה לחסוך כ-${fmtR(spent - target)} בחודש.` });
+    }
+    const small = (byCat[c.name] || []).filter((t) => Number(t.amount) <= 50);
+    if (small.length >= 5) {
+      const s = sum(small);
+      add({ kind: "idea", cat: c.name, save: s * 0.3, title: `${icon} ${c.name}: הרבה קניות קטנות`,
+        text: `${small.length} קניות של עד ₪50, ביחד ${fmtR(s)}. קניות קטנות מצטברות; צמצום בשליש יחסוך כ-${fmtR(s * 0.3)}.` });
+    }
+  });
+
+  // 2. Unexpected expenses
+  const personal = sum(exp);
+  const unplanned = sum(byCat[UNPLANNED] || []);
+  if (unplanned > 0 && personal > 0 && unplanned / personal >= 0.05) {
+    add({ kind: "idea", cat: null, save: 0, title: `⚡ הוצאות לא צפויות: ${fmtR(unplanned)}`,
+      text: `${Math.round((unplanned / personal) * 100)}% מההוצאות החודש לא היו מתוכננות. כדאי לשים בצד כל חודש סכום קבוע למקרים כאלה, כדי שלא יפתיעו.` });
+  }
+
+  // 3. Fixed deductions: subscriptions to review, services worth comparing
+  const fixedList = cats.filter((c) => isFixed(c)).map((c) => ({ c, amount: fixedAmount(c, key) })).filter((x) => x.amount > 0);
+  fixedList.forEach(({ c, amount }) => {
+    const n = c.name;
+    if (/מנוי|נטפליקס|ספוטיפיי|סטרימינג|דיסני|יוטיוב|אפל|אמזון|כושר|netflix|spotify|disney|youtube|apple|prime/i.test(n)) {
+      add({ kind: "idea", cat: "fixed:" + n, save: amount, title: `${catIcon(c)} ${n}: בדקו אם אתם משתמשים`,
+        text: `${fmtR(amount)} בחודש, ${fmtR(amount * 12)} בשנה. אם לא משתמשים בזה הרבה, ביטול או הקפאה יחסכו את כל הסכום.` });
+    } else if (/ביטוח|סלולר|פלאפון|טלפון|אינטרנט|טלוויזיה|כבלים|חשמל|גז/.test(n)) {
+      add({ kind: "idea", cat: "fixed:" + n, save: amount * 0.15, title: `${catIcon(c)} ${n}: שווה להשוות מחירים`,
+        text: `משלמים ${fmtR(amount)} בחודש. הרבה פעמים אפשר לקבל הנחה בשיחה עם החברה או אצל מתחרה; הוזלה של 15% חוסכת כ-${fmtR(amount * 0.15)} בחודש, ${fmtR(amount * 0.15 * 12)} בשנה.` });
+    }
+  });
+
+  // 4. The big picture: share of fixed deductions, how much is left
+  const tot = periodTotals(key, periodTx);
+  const deductTotal = fixedList.reduce((s, x) => s + x.amount, 0);
+  if (tot.income > 0 && deductTotal / tot.income > 0.5) {
+    add({ kind: "warn", cat: null, save: 0, title: `🔁 ההורדות הקבועות הן ${Math.round((deductTotal / tot.income) * 100)}% מההכנסה`,
+      text: `יותר מחצי מההכנסה יורד אוטומטית. כדאי לעבור על הרשימה ולבדוק מה אפשר להוזיל או לבטל.` });
+  }
+  if (tot.income > 0) {
+    const leftAfterAll = tot.income - deductTotal - personal;
+    const rate = leftAfterAll / tot.income;
+    if (leftAfterAll < 0) {
+      add({ kind: "warn", cat: null, save: 0, title: `🚨 החודש יוצא יותר ממה שנכנס`,
+        text: `אחרי כל ההורדות וההוצאות חסרים ${fmtR(-leftAfterAll)}. ההצעות למעלה יכולות לעזור לסגור את הפער.` });
+    } else if (rate < 0.1) {
+      add({ kind: "idea", cat: null, save: 0, title: `🐷 נשאר רק ${Math.round(rate * 100)}% מההכנסה`,
+        text: `נסו לשים בצד כבר בתחילת החודש לפחות 10% מההכנסה (${fmtR(tot.income * 0.1)}), כדי שהחיסכון לא יהיה "מה שנשאר".` });
+    } else {
+      add({ kind: "good", cat: null, save: 0, title: `🌟 נשאר ${Math.round(rate * 100)}% מההכנסה`,
+        text: `אחרי כל ההורדות וההוצאות צפוי להישאר ${fmtR(leftAfterAll)}. כדאי להעביר חלק מזה לחיסכון עוד לפני שהוא מתבזבז.` });
+    }
+  }
+  const potential = Object.values(perCat).reduce((s, v) => s + v, 0);
+  return { tips, potential, hasData: exp.length > 0 || deductTotal > 0, monthDone: !inProgress && effectiveDate(key) <= today, daysLeft };
+}
+
+function renderSavings(sorted, key) {
+  const btn = $("save-btn"), panel = $("save-panel");
+  if (!btn) return;
+  const r = savingsTips(sorted, key);
+  // At the end of the month (last 3 days, or a month that's over) the summary is highlighted
+  const ready = r.hasData && (r.monthDone || (r.daysLeft > 0 && r.daysLeft <= 3));
+  btn.innerHTML = `💡 ${ready ? "סיכום החודש: " : ""}איפה אפשר לחסוך?${ready ? ` <span class="save-ready">מוכן</span>` : ""}`;
+  btn.setAttribute("aria-expanded", String(savingsOpen));
+  panel.classList.toggle("hidden", !savingsOpen);
+  if (!savingsOpen) return;
+  if (!r.hasData) {
+    panel.innerHTML = `<p class="muted">עוד אין מספיק נתונים החודש. אחרי שתזינו הוצאות והורדות קבועות, יופיעו כאן הצעות לחיסכון.</p>`;
+    return;
+  }
+  const order = { warn: 0, idea: 1, good: 2 };
+  const tips = [...r.tips].sort((a, b) => order[a.kind] - order[b.kind] || b.save - a.save);
+  panel.innerHTML = `
+    ${r.potential >= 1 ? `<div class="save-sum">פוטנציאל חיסכון משוער: <b>כ-${fmtR(r.potential)} בחודש</b> <span class="muted">(כ-${fmtR(Math.round(r.potential) * 12)} בשנה)</span></div>` : ""}
+    <div class="save-list">${tips.map((t) => `
+      <div class="save-tip ${t.kind}">
+        <div class="save-title">${t.title}</div>
+        <div class="save-text">${t.text}</div>
+        ${t.save >= 1 ? `<div class="save-amt">חיסכון אפשרי: כ-${fmtR(t.save)} בחודש</div>` : ""}
+      </div>`).join("") || `<p class="muted">לא מצאתי מקומות בולטים לחיסכון החודש. כל הכבוד! 🎉</p>`}</div>
+    <p class="save-note">💬 אלה הצעות בלבד, לפי הנתונים שהזנתם. שום דבר באתר לא משתנה עד שתחליטו לשנות בעצמכם.</p>`;
+}
+
 // ----- Personal expenses compared with the previous month -----
 // For the month in progress, compare up to the same day of the previous month, so a half month isn't set against a whole one.
 function renderCompare(sorted, key) {
@@ -649,7 +784,11 @@ function renderCompare(sorted, key) {
   const prevTx = sorted.filter((t) => periodOf(t.date) === prevKey);
   const curTx = sorted.filter((t) => periodOf(t.date) === key);
   if (!prevTx.some((t) => t.type === "expense")) { $("s-compare").innerHTML = ""; return; }
+  // A month that hasn't started yet has nothing to compare
+  if (effectiveDate(key) > todayStr()) { $("s-compare").innerHTML = ""; return; }
   const inProgress = periodOf(todayStr()) === key;
+  // At the very start of a month (nothing spent yet) "less than last month" would mislead
+  if (inProgress && !curTx.some((t) => t.type === "expense")) { $("s-compare").innerHTML = ""; return; }
   let prev = spend(prevTx), cur = spend(curTx), when = "מבחודש שעבר";
   if (inProgress) {
     const [start] = rangeOfKey(key), [pStart] = rangeOfKey(prevKey);
@@ -1047,6 +1186,8 @@ function wireEvents() {
     if (e.key !== "Escape" || !(editingStat || editingDeduct || editingTx)) return;
     editingStat = null; editingDeduct = null; editingTx = null; render();
   });
+
+  $("save-btn").onclick = () => { savingsOpen = !savingsOpen; render(); if (savingsOpen) $("save-panel").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
 
   // ----- Deductions drawer -----
   const stats = $("stat-income").parentElement;
